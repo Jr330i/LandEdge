@@ -1,0 +1,13 @@
+/* MUI CssBaseline supplies most resets; keep this minimal. */
+#root {
+  min-height: 100vh;
+}
+
+code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.82em;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1e40af;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+}

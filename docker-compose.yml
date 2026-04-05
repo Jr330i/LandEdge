@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sofinda-postgres
+    environment:
+      POSTGRES_USER: sofinda
+      POSTGRES_PASSWORD: sofinda
+      POSTGRES_DB: sofinda
+    ports:
+      - "5432:5432"
+    volumes:
+      - sofinda_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sofinda -d sofinda"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: sofinda-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  sofinda_pgdata:

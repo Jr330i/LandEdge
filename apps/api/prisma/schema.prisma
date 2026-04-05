@@ -1,0 +1,297 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Client organization (property management company). PRD §8 — multi-tenancy anchor.
+model Organization {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String      @unique
+  timezone     String      @default("Africa/Johannesburg")
+  baseCurrency String      @default("ZAR") @map("base_currency")
+  settings     Json        @default("{}")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  users        User[]
+  portfolios       Portfolio[]
+  tenants          Tenant[]
+  leases           Lease[]
+  chargeSchedules  ChargeSchedule[]
+  invoices         Invoice[]
+  ledgerEntries    LedgerEntry[]
+
+  @@map("organizations")
+}
+
+/// Staff user scoped to an organization (platform SUPER_ADMIN still has a home org for Phase 1).
+model User {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  passwordHash   String?      @map("password_hash")
+  displayName    String?      @map("display_name")
+  role           UserRole     @default(READ_ONLY)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, email])
+  @@map("users")
+}
+
+/// Appendix A — permission matrix roles (subset for Phase 1).
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  PORTFOLIO_MANAGER
+  FINANCE
+  FACILITIES_MANAGER
+  TENANT_USER
+  OWNER_USER
+  READ_ONLY
+}
+
+/// PRD FR-004 — portfolio (group of properties under one org).
+model Portfolio {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  region         String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  buildings      Building[]
+
+  @@map("portfolios")
+}
+
+/// PRD FR-004/005 — building within a portfolio.
+model Building {
+  id          String    @id @default(uuid()) @db.Uuid
+  portfolioId String    @map("portfolio_id") @db.Uuid
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  name        String
+  address     String?
+  latitude    Decimal?  @db.Decimal(10, 7)
+  longitude   Decimal?  @db.Decimal(10, 7)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  floors      Floor[]
+
+  @@map("buildings")
+}
+
+model Floor {
+  id         String   @id @default(uuid()) @db.Uuid
+  buildingId String   @map("building_id") @db.Uuid
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  name       String
+  level      Int?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  units      Unit[]
+
+  @@map("floors")
+}
+
+/// PRD FR-005 — rentable unit / premises.
+enum UnitStatus {
+  VACANT
+  UNDER_RENOVATION
+  MARKETED
+  LEASED
+  OCCUPIED
+}
+
+model Unit {
+  id           String      @id @default(uuid()) @db.Uuid
+  floorId      String      @map("floor_id") @db.Uuid
+  floor        Floor       @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  code         String
+  type         String
+  rentableArea Decimal?    @map("rentable_area") @db.Decimal(14, 4)
+  status       UnitStatus  @default(VACANT)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  leaseUnits   LeaseUnit[]
+
+  @@unique([floorId, code])
+  @@map("units")
+}
+
+/// PRD §8 — commercial tenant (lessee).
+model Tenant {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  legalName      String       @map("legal_name")
+  tradingName    String?      @map("trading_name")
+  contactEmail   String?      @map("contact_email")
+  contactPhone   String?      @map("contact_phone")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  leases        Lease[]
+  invoices      Invoice[]
+  ledgerEntries LedgerEntry[]
+
+  @@map("tenants")
+}
+
+/// PRD §9.1 — simplified lifecycle for Phase 1 (expand later).
+enum LeaseStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  ACTIVE
+  EXPIRING
+  RENEWED
+  TERMINATED
+}
+
+/// PRD FR-007 — lease agreement; `organization_id` matches tenant org (denormalized for RLS).
+model Lease {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenantId       String       @map("tenant_id") @db.Uuid
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  startDate      DateTime     @map("start_date") @db.Date
+  endDate        DateTime     @map("end_date") @db.Date
+  status         LeaseStatus  @default(DRAFT)
+  terms          Json         @default("{}")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  leaseUnits      LeaseUnit[]
+  chargeSchedules ChargeSchedule[]
+  invoices        Invoice[]
+  ledgerEntries   LedgerEntry[]
+
+  @@map("leases")
+}
+
+/// FR-007.01 — one lease, many units.
+model LeaseUnit {
+  id                   String   @id @default(uuid()) @db.Uuid
+  leaseId              String   @map("lease_id") @db.Uuid
+  lease                Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  unitId               String   @map("unit_id") @db.Uuid
+  unit                 Unit     @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  percentageAllocated  Decimal? @map("percentage_allocated") @db.Decimal(7, 4)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@unique([leaseId, unitId])
+  @@map("lease_units")
+}
+
+// --- Billing & sub-ledger (PRD: billing engine, immutable ledger, ERP export) ---
+
+enum BillingFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum ChargeKind {
+  RENT
+  CAM
+  PARKING
+  OTHER
+}
+
+/// Recurring charge template against a lease.
+model ChargeSchedule {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leaseId        String           @map("lease_id") @db.Uuid
+  lease          Lease            @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  kind           ChargeKind
+  label          String?
+  amount         Decimal          @db.Decimal(14, 2)
+  currency       String           @default("ZAR")
+  frequency      BillingFrequency
+  startDate      DateTime         @map("start_date") @db.Date
+  endDate        DateTime?        @map("end_date") @db.Date
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  invoiceLines   InvoiceLine[]
+
+  @@map("charge_schedules")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  VOID
+}
+
+model Invoice {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leaseId        String        @map("lease_id") @db.Uuid
+  lease          Lease         @relation(fields: [leaseId], references: [id], onDelete: Restrict)
+  tenantId       String        @map("tenant_id") @db.Uuid
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  status         InvoiceStatus @default(DRAFT)
+  periodStart    DateTime      @map("period_start") @db.Date
+  periodEnd      DateTime      @map("period_end") @db.Date
+  dueDate        DateTime?     @map("due_date") @db.Date
+  currency       String        @default("ZAR")
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  lines          InvoiceLine[]
+  ledgerEntry    LedgerEntry?
+
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id               String          @id @default(uuid()) @db.Uuid
+  invoiceId        String          @map("invoice_id") @db.Uuid
+  invoice          Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  chargeScheduleId String?         @map("charge_schedule_id") @db.Uuid
+  chargeSchedule   ChargeSchedule? @relation(fields: [chargeScheduleId], references: [id], onDelete: SetNull)
+  description      String
+  amount           Decimal         @db.Decimal(14, 2)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@map("invoice_lines")
+}
+
+enum LedgerSource {
+  INVOICE
+  PAYMENT
+  ADJUSTMENT
+}
+
+/// Append-only tenant sub-ledger line (no updates/deletes via API).
+model LedgerEntry {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leaseId        String       @map("lease_id") @db.Uuid
+  lease          Lease        @relation(fields: [leaseId], references: [id], onDelete: Restrict)
+  tenantId       String       @map("tenant_id") @db.Uuid
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId      String?      @unique @map("invoice_id") @db.Uuid
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  narrative      String
+  /// Positive increases amount receivable from tenant; negative is credit/payment.
+  signedAmount   Decimal      @map("signed_amount") @db.Decimal(14, 2)
+  currency       String       @default("ZAR")
+  source         LedgerSource
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("ledger_entries")
+}
+

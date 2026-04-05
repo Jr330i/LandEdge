@@ -1,0 +1,5 @@
+List with tenant filter, status/dates/units (with % when relevant), view dialog for everyone
+Create (cascade + multi-floor/building units, allocations, tenant, dates, status, notes → terms.notes) for property-write roles
+Edit (dates, status, notes with merge of other terms keys, unit % or replace units via picker) and delete for those roles
+Billing shortcuts from the view dialog via ?leaseId=, wired in DashboardShell
+
