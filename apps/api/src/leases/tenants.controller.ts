@@ -4,9 +4,11 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,6 +16,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -33,8 +36,16 @@ export class TenantsController {
 
   @Get()
   @ApiOperation({ summary: 'List tenants' })
-  findAll(@CurrentUser() user: JwtAccessPayload) {
-    return this.tenantsService.findAll(user);
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'pageSize', required: false, example: 20 })
+  findAll(
+    @CurrentUser() user: JwtAccessPayload,
+    @Query('q') q?: string,
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize?: number,
+  ) {
+    return this.tenantsService.findAll(user, { q, page, pageSize });
   }
 
   @Get(':id')

@@ -350,6 +350,11 @@ function App() {
     loadTenants(token)
   }, [token, loadTenants])
 
+  const reloadPortfolios = useCallback(() => {
+    if (!token) return
+    loadPortfolios(token)
+  }, [token, loadPortfolios])
+
   const canWriteProperty =
     me != null && PROPERTY_WRITE_ROLES.has(me.role)
 
@@ -543,6 +548,7 @@ function App() {
     onLeaseTenantFilterChange,
     reloadLeases,
     reloadTenants,
+    reloadPortfolios,
     canWriteProperty,
     handleCreatePortfolio,
     canWriteBilling,

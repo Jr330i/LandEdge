@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -36,12 +37,18 @@ export class LeasesController {
   @Get()
   @ApiOperation({ summary: 'List leases' })
   @ApiQuery({ name: 'tenantId', required: false })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'pageSize', required: false, example: 20 })
   findAll(
     @CurrentUser() user: JwtAccessPayload,
     @Query('tenantId', new ParseUUIDPipe({ version: '4', optional: true }))
     tenantId?: string,
+    @Query('q') q?: string,
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize?: number,
   ) {
-    return this.leasesService.findAll(user, tenantId);
+    return this.leasesService.findAll(user, { tenantId, q, page, pageSize });
   }
 
   @Get(':id')

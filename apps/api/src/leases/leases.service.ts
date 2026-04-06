@@ -24,26 +24,89 @@ const LEASE_OVERLAP_BLOCKING: LeaseStatus[] = [
   LeaseStatus.RENEWED,
 ];
 
+type LeaseListParams = {
+  tenantId?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+};
+
 @Injectable()
 export class LeasesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(actor: JwtAccessPayload, tenantId?: string) {
-    return this.prisma.withUserRls(actor, (tx) =>
-      tx.lease.findMany({
-        where: {
-          ...(actor.role === UserRole.SUPER_ADMIN
-            ? {}
-            : { organizationId: actor.organizationId }),
-          ...(tenantId ? { tenantId } : {}),
-        },
-        orderBy: { startDate: 'desc' },
-        include: {
-          tenant: { select: { id: true, legalName: true, tradingName: true } },
-          leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
-        },
-      }),
-    );
+  findAll(actor: JwtAccessPayload, params?: LeaseListParams) {
+    const tenantId = params?.tenantId;
+    const q = params?.q?.trim();
+    const page = params?.page;
+    const pageSize = params?.pageSize;
+    const paged = page !== undefined || pageSize !== undefined || !!q;
+    const pageResolved = Math.max(1, page ?? 1);
+    const pageSizeResolved = Math.min(100, Math.max(1, pageSize ?? 20));
+    const maybeStatus = q?.toUpperCase() as LeaseStatus | undefined;
+    const where: Prisma.LeaseWhereInput = {
+      ...(actor.role === UserRole.SUPER_ADMIN
+        ? {}
+        : { organizationId: actor.organizationId }),
+      ...(tenantId ? { tenantId } : {}),
+      ...(q
+        ? {
+            OR: [
+              {
+                tenant: {
+                  legalName: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                tenant: {
+                  tradingName: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                leaseUnits: {
+                  some: {
+                    unit: { code: { contains: q, mode: 'insensitive' } },
+                  },
+                },
+              },
+              ...(maybeStatus && Object.values(LeaseStatus).includes(maybeStatus)
+                ? [{ status: maybeStatus }]
+                : []),
+            ],
+          }
+        : {}),
+    };
+    return this.prisma.withUserRls(actor, async (tx) => {
+      if (!paged) {
+        return tx.lease.findMany({
+          where,
+          orderBy: { startDate: 'desc' },
+          include: {
+            tenant: { select: { id: true, legalName: true, tradingName: true } },
+            leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
+          },
+        });
+      }
+      const [items, total] = await tx.$transaction([
+        tx.lease.findMany({
+          where,
+          orderBy: { startDate: 'desc' },
+          include: {
+            tenant: { select: { id: true, legalName: true, tradingName: true } },
+            leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
+          },
+          skip: (pageResolved - 1) * pageSizeResolved,
+          take: pageSizeResolved,
+        }),
+        tx.lease.count({ where }),
+      ]);
+      return {
+        items,
+        total,
+        page: pageResolved,
+        pageSize: pageSizeResolved,
+      };
+    });
   }
 
   findOne(id: string, actor: JwtAccessPayload) {

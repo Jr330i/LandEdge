@@ -47,6 +47,7 @@ export type DashboardContextValue = {
   onLeaseTenantFilterChange: (e: SelectChangeEvent<string>) => void
   reloadLeases: () => void
   reloadTenants: () => void
+  reloadPortfolios: () => void
   canWriteProperty: boolean
   handleCreatePortfolio: (e: FormEvent) => void
   canWriteBilling: boolean

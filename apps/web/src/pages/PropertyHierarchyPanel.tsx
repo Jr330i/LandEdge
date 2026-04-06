@@ -80,6 +80,8 @@ export function PropertyHierarchyPanel() {
 
   const [newBuildName, setNewBuildName] = useState('')
   const [newBuildAddress, setNewBuildAddress] = useState('')
+  const [newBuildLatitude, setNewBuildLatitude] = useState('')
+  const [newBuildLongitude, setNewBuildLongitude] = useState('')
   const [buildCreateSaving, setBuildCreateSaving] = useState(false)
   const [newFloorName, setNewFloorName] = useState('')
   const [newFloorLevel, setNewFloorLevel] = useState('')
@@ -93,6 +95,8 @@ export function PropertyHierarchyPanel() {
   const [editingBuilding, setEditingBuilding] = useState<BuildingRow | null>(null)
   const [editBuildName, setEditBuildName] = useState('')
   const [editBuildAddress, setEditBuildAddress] = useState('')
+  const [editBuildLatitude, setEditBuildLatitude] = useState('')
+  const [editBuildLongitude, setEditBuildLongitude] = useState('')
   const [buildPatchSaving, setBuildPatchSaving] = useState(false)
   const [buildPatchErr, setBuildPatchErr] = useState<string | null>(null)
   const [deletingBuilding, setDeletingBuilding] = useState<BuildingRow | null>(null)
@@ -198,6 +202,15 @@ export function PropertyHierarchyPanel() {
   )
 
   useEffect(() => {
+    if (!portfolioId || !portfolios) return
+    if (!portfolios.some((p) => p.id === portfolioId)) {
+      setPortfolioId('')
+      setSelectedBuildingId('')
+      setSelectedFloorId('')
+    }
+  }, [portfolios, portfolioId])
+
+  useEffect(() => {
     if (!token || !portfolioId) {
       setBuildings(null)
       setBuildingsErr(null)
@@ -247,7 +260,17 @@ export function PropertyHierarchyPanel() {
     setBuildCreateSaving(true)
     const body: Record<string, string> = { portfolioId, name }
     const addr = newBuildAddress.trim()
+    const lat = newBuildLatitude.trim()
+    const lon = newBuildLongitude.trim()
     if (addr) body.address = addr
+    if (lat !== '') {
+      const n = parseFloat(lat.replace(',', '.'))
+      if (Number.isFinite(n)) body.latitude = String(n)
+    }
+    if (lon !== '') {
+      const n = parseFloat(lon.replace(',', '.'))
+      if (Number.isFinite(n)) body.longitude = String(n)
+    }
     fetch('/api/v1/buildings', {
       method: 'POST',
       headers: {
@@ -266,6 +289,8 @@ export function PropertyHierarchyPanel() {
       .then(() => {
         setNewBuildName('')
         setNewBuildAddress('')
+        setNewBuildLatitude('')
+        setNewBuildLongitude('')
         loadBuildings(token, portfolioId)
       })
       .catch((err: Error) => setBuildingsErr(err.message))
@@ -365,6 +390,16 @@ export function PropertyHierarchyPanel() {
     setEditingBuilding(b)
     setEditBuildName(b.name)
     setEditBuildAddress(b.address ?? '')
+    setEditBuildLatitude(
+      b.latitude !== undefined && b.latitude !== null && b.latitude !== ''
+        ? String(b.latitude)
+        : '',
+    )
+    setEditBuildLongitude(
+      b.longitude !== undefined && b.longitude !== null && b.longitude !== ''
+        ? String(b.longitude)
+        : '',
+    )
     setBuildPatchErr(null)
   }
 
@@ -372,6 +407,20 @@ export function PropertyHierarchyPanel() {
     if (!token || !editingBuilding) return
     setBuildPatchSaving(true)
     setBuildPatchErr(null)
+    const lat = editBuildLatitude.trim()
+    const lon = editBuildLongitude.trim()
+    const latPayload =
+      lat === ''
+        ? { latitude: null as number | null }
+        : Number.isFinite(parseFloat(lat.replace(',', '.')))
+          ? { latitude: parseFloat(lat.replace(',', '.')) }
+          : {}
+    const lonPayload =
+      lon === ''
+        ? { longitude: null as number | null }
+        : Number.isFinite(parseFloat(lon.replace(',', '.')))
+          ? { longitude: parseFloat(lon.replace(',', '.')) }
+          : {}
     fetch(`/api/v1/buildings/${editingBuilding.id}`, {
       method: 'PATCH',
       headers: {
@@ -381,6 +430,8 @@ export function PropertyHierarchyPanel() {
       body: JSON.stringify({
         name: editBuildName.trim(),
         address: editBuildAddress.trim() || null,
+        ...latPayload,
+        ...lonPayload,
       }),
     })
       .then(async (r) => {
@@ -643,6 +694,20 @@ export function PropertyHierarchyPanel() {
                 value={newBuildAddress}
                 onChange={(e) => setNewBuildAddress(e.target.value)}
                 sx={{ minWidth: 220 }}
+              />
+              <TextField
+                size="small"
+                label="Latitude (optional)"
+                value={newBuildLatitude}
+                onChange={(e) => setNewBuildLatitude(e.target.value)}
+                sx={{ width: 160 }}
+              />
+              <TextField
+                size="small"
+                label="Longitude (optional)"
+                value={newBuildLongitude}
+                onChange={(e) => setNewBuildLongitude(e.target.value)}
+                sx={{ width: 170 }}
               />
               <Button
                 type="submit"
@@ -1026,6 +1091,22 @@ export function PropertyHierarchyPanel() {
               value={editBuildAddress}
               onChange={(e) => setEditBuildAddress(e.target.value)}
             />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Latitude"
+                size="small"
+                fullWidth
+                value={editBuildLatitude}
+                onChange={(e) => setEditBuildLatitude(e.target.value)}
+              />
+              <TextField
+                label="Longitude"
+                size="small"
+                fullWidth
+                value={editBuildLongitude}
+                onChange={(e) => setEditBuildLongitude(e.target.value)}
+              />
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>

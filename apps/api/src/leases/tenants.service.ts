@@ -9,21 +9,63 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 
+type TenantListParams = {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+};
+
 @Injectable()
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(actor: JwtAccessPayload) {
-    return this.prisma.withUserRls(actor, (tx) =>
-      tx.tenant.findMany({
-        where:
-          actor.role === UserRole.SUPER_ADMIN
-            ? {}
-            : { organizationId: actor.organizationId },
-        orderBy: { legalName: 'asc' },
-        include: { _count: { select: { leases: true } } },
-      }),
-    );
+  findAll(actor: JwtAccessPayload, params?: TenantListParams) {
+    const q = params?.q?.trim();
+    const page = params?.page;
+    const pageSize = params?.pageSize;
+    const paged = page !== undefined || pageSize !== undefined || !!q;
+    const pageResolved = Math.max(1, page ?? 1);
+    const pageSizeResolved = Math.min(100, Math.max(1, pageSize ?? 20));
+    const where = {
+      ...(actor.role === UserRole.SUPER_ADMIN
+        ? {}
+        : { organizationId: actor.organizationId }),
+      ...(q
+        ? {
+            OR: [
+              { legalName: { contains: q, mode: 'insensitive' as const } },
+              { tradingName: { contains: q, mode: 'insensitive' as const } },
+              { contactEmail: { contains: q, mode: 'insensitive' as const } },
+              { contactPhone: { contains: q, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    return this.prisma.withUserRls(actor, async (tx) => {
+      if (!paged) {
+        return tx.tenant.findMany({
+          where,
+          orderBy: { legalName: 'asc' },
+          include: { _count: { select: { leases: true } } },
+        });
+      }
+      const [items, total] = await tx.$transaction([
+        tx.tenant.findMany({
+          where,
+          orderBy: { legalName: 'asc' },
+          include: { _count: { select: { leases: true } } },
+          skip: (pageResolved - 1) * pageSizeResolved,
+          take: pageSizeResolved,
+        }),
+        tx.tenant.count({ where }),
+      ]);
+      return {
+        items,
+        total,
+        page: pageResolved,
+        pageSize: pageSizeResolved,
+      };
+    });
   }
 
   findOne(id: string, actor: JwtAccessPayload) {
