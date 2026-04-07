@@ -87,7 +87,7 @@ export class LeasesService {
           },
         });
       }
-      const [items, total] = await tx.$transaction([
+      const [items, total] = await Promise.all([
         tx.lease.findMany({
           where,
           orderBy: { startDate: 'desc' },

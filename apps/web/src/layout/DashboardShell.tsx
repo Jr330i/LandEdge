@@ -32,8 +32,7 @@ const NAV_LINKS: { to: string; label: string }[] = [
 ]
 
 export function DashboardShell() {
-  const { me, signOut, leases, billingLeaseId, setBillingLeaseId } =
-    useDashboard()
+  const { me, signOut, billingLeaseId, setBillingLeaseId } = useDashboard()
   const [menuEl, setMenuEl] = useState<null | HTMLElement>(null)
   const location = useLocation()
   const menuOpen = Boolean(menuEl)
@@ -43,15 +42,9 @@ export function DashboardShell() {
   useEffect(() => {
     if (!location.pathname.startsWith('/billing')) return
     const q = new URLSearchParams(location.search).get('leaseId')
-    if (!q || !leases?.some((l) => l.id === q)) return
+    if (!q) return
     if (billingLeaseId !== q) setBillingLeaseId(q)
-  }, [
-    location.pathname,
-    location.search,
-    leases,
-    billingLeaseId,
-    setBillingLeaseId,
-  ])
+  }, [location.pathname, location.search, billingLeaseId, setBillingLeaseId])
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>

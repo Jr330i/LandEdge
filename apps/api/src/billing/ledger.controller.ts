@@ -1,3 +1,4 @@
+import { LedgerSource } from '@prisma/client';
 import {
   Body,
   Controller,
@@ -33,14 +34,42 @@ export class LedgerController {
   @ApiOperation({ summary: 'List ledger entries (tenant sub-ledger)' })
   @ApiQuery({ name: 'leaseId', required: false })
   @ApiQuery({ name: 'tenantId', required: false })
+  @ApiQuery({ name: 'source', required: false, enum: LedgerSource })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'createdFrom', required: false })
+  @ApiQuery({ name: 'createdTo', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'pageSize', required: false })
   findAll(
     @CurrentUser() user: JwtAccessPayload,
     @Query('leaseId', new ParseUUIDPipe({ version: '4', optional: true }))
     leaseId?: string,
     @Query('tenantId', new ParseUUIDPipe({ version: '4', optional: true }))
     tenantId?: string,
+    @Query('source') sourceRaw?: string,
+    @Query('q') q?: string,
+    @Query('createdFrom') createdFrom?: string,
+    @Query('createdTo') createdTo?: string,
+    @Query('page') pageRaw?: string,
+    @Query('pageSize') pageSizeRaw?: string,
   ) {
-    return this.service.findAll(user, { leaseId, tenantId });
+    const source =
+      sourceRaw &&
+      Object.values(LedgerSource).includes(sourceRaw as LedgerSource)
+        ? (sourceRaw as LedgerSource)
+        : undefined;
+    const page = pageRaw ? Number.parseInt(pageRaw, 10) : undefined;
+    const pageSize = pageSizeRaw ? Number.parseInt(pageSizeRaw, 10) : undefined;
+    return this.service.findAll(user, {
+      leaseId,
+      tenantId,
+      source,
+      q,
+      createdFrom,
+      createdTo,
+      page: Number.isFinite(page) ? page : undefined,
+      pageSize: Number.isFinite(pageSize) ? pageSize : undefined,
+    });
   }
 
   @Get('export')
@@ -48,6 +77,10 @@ export class LedgerController {
   @ApiProduces('text/csv')
   @ApiQuery({ name: 'leaseId', required: false })
   @ApiQuery({ name: 'tenantId', required: false })
+  @ApiQuery({ name: 'source', required: false, enum: LedgerSource })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'createdFrom', required: false })
+  @ApiQuery({ name: 'createdTo', required: false })
   @Header('Content-Disposition', 'attachment; filename="sofinda-ledger.csv"')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   async exportCsv(
@@ -56,8 +89,24 @@ export class LedgerController {
     leaseId?: string,
     @Query('tenantId', new ParseUUIDPipe({ version: '4', optional: true }))
     tenantId?: string,
+    @Query('source') sourceRaw?: string,
+    @Query('q') q?: string,
+    @Query('createdFrom') createdFrom?: string,
+    @Query('createdTo') createdTo?: string,
   ) {
-    return this.service.exportCsv(user, { leaseId, tenantId });
+    const source =
+      sourceRaw &&
+      Object.values(LedgerSource).includes(sourceRaw as LedgerSource)
+        ? (sourceRaw as LedgerSource)
+        : undefined;
+    return this.service.exportCsv(user, {
+      leaseId,
+      tenantId,
+      source,
+      q,
+      createdFrom,
+      createdTo,
+    });
   }
 
   @Post('manual')

@@ -23,6 +23,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { BILLING_WRITE_ROLES } from './billing.constants';
 import { ChargeSchedulesService } from './charge-schedules.service';
 import { CreateChargeScheduleDto } from './dto/create-charge-schedule.dto';
+import { ReorderChargeSchedulesDto } from './dto/reorder-charge-schedules.dto';
 import { UpdateChargeScheduleDto } from './dto/update-charge-schedule.dto';
 
 @ApiTags('billing — charge schedules')
@@ -39,6 +40,17 @@ export class ChargeSchedulesController {
     @Query('leaseId', ParseUUIDPipe) leaseId: string,
   ) {
     return this.service.findAllForLease(user, leaseId);
+  }
+
+  @Post('reorder')
+  @UseGuards(RolesGuard)
+  @Roles(...BILLING_WRITE_ROLES)
+  @ApiOperation({ summary: 'Reorder charge schedules within a lease' })
+  reorder(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: ReorderChargeSchedulesDto,
+  ) {
+    return this.service.reorder(dto.leaseId, dto.chargeScheduleIds, user);
   }
 
   @Post()

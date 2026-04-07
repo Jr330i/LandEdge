@@ -8,6 +8,7 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateChargeScheduleDto {
@@ -16,10 +17,11 @@ export class UpdateChargeScheduleDto {
   kind?: ChargeKind;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== undefined && v !== null)
   @IsString()
   @MinLength(1)
   @MaxLength(200)
-  label?: string;
+  label?: string | null;
 
   @IsOptional()
   @Type(() => Number)
@@ -40,8 +42,9 @@ export class UpdateChargeScheduleDto {
   startDate?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== undefined && v !== null)
   @IsDateString()
-  endDate?: string;
+  endDate?: string | null;
 
   @IsOptional()
   @IsBoolean()

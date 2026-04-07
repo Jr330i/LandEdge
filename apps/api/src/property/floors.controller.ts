@@ -24,6 +24,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PROPERTY_WRITE_ROLES } from './property.constants';
 import { CreateFloorDto } from './dto/create-floor.dto';
+import { ReorderFloorsDto } from './dto/reorder-floors.dto';
 import { UpdateFloorDto } from './dto/update-floor.dto';
 import { FloorsService } from './floors.service';
 
@@ -50,6 +51,17 @@ export class FloorsController {
     @CurrentUser() user: JwtAccessPayload,
   ) {
     return this.floorsService.findOne(id, user);
+  }
+
+  @Post('reorder')
+  @UseGuards(RolesGuard)
+  @Roles(...PROPERTY_WRITE_ROLES)
+  @ApiOperation({ summary: 'Reorder floors within a building' })
+  reorder(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: ReorderFloorsDto,
+  ) {
+    return this.floorsService.reorder(dto.buildingId, dto.floorIds, user);
   }
 
   @Post()

@@ -24,6 +24,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PROPERTY_WRITE_ROLES } from './property.constants';
 import { CreateUnitDto } from './dto/create-unit.dto';
+import { ReorderUnitsDto } from './dto/reorder-units.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { UnitsService } from './units.service';
 
@@ -50,6 +51,17 @@ export class UnitsController {
     @CurrentUser() user: JwtAccessPayload,
   ) {
     return this.unitsService.findOne(id, user);
+  }
+
+  @Post('reorder')
+  @UseGuards(RolesGuard)
+  @Roles(...PROPERTY_WRITE_ROLES)
+  @ApiOperation({ summary: 'Reorder units within a floor' })
+  reorder(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: ReorderUnitsDto,
+  ) {
+    return this.unitsService.reorder(dto.floorId, dto.unitIds, user);
   }
 
   @Post()

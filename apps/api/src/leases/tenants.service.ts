@@ -49,7 +49,7 @@ export class TenantsService {
           include: { _count: { select: { leases: true } } },
         });
       }
-      const [items, total] = await tx.$transaction([
+      const [items, total] = await Promise.all([
         tx.tenant.findMany({
           where,
           orderBy: { legalName: 'asc' },

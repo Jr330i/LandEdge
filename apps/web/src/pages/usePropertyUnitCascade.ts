@@ -208,6 +208,48 @@ export function usePropertyUnitCascade(
     [],
   )
 
+  /** Hydrate labels for units not on the current floor (e.g. edit lease) via `GET /units/:id`. */
+  useEffect(() => {
+    if (!token || selectedUnitIds.length === 0) return
+    const missing = selectedUnitIds.filter((id) => !unitMetaById[id])
+    if (missing.length === 0) return
+    let cancelled = false
+    void Promise.all(
+      missing.map((unitId) =>
+        fetch(`/api/v1/units/${encodeURIComponent(unitId)}`, {
+          headers: authHeaders(token),
+        }).then(async (r) => {
+          if (r.status === 401) {
+            onUnauthorized()
+            throw new Error('Session expired')
+          }
+          if (!r.ok) throw new Error(await readApiErrorMessage(r))
+          return r.json() as Promise<UnitListRow>
+        }),
+      ),
+    )
+      .then((rows) => {
+        if (cancelled) return
+        setUnitMetaById((prev) => {
+          const next = { ...prev }
+          for (const u of rows) {
+            next[u.id] = {
+              code: u.code,
+              floorId: u.floorId,
+              buildingId: u.floor.buildingId,
+            }
+          }
+          return next
+        })
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setHierarchyErr(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token, selectedUnitIds, unitMetaById, onUnauthorized])
+
   return {
     portfolioId,
     setPortfolioId,

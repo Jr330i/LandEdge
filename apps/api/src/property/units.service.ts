@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { JwtAccessPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUnitDto } from './dto/create-unit.dto';
@@ -12,7 +16,7 @@ export class UnitsService {
     return this.prisma.withUserRls(actor, (tx) =>
       tx.unit.findMany({
         where: { floorId },
-        orderBy: { code: 'asc' },
+        orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
         include: {
           floor: { select: { buildingId: true } },
         },
@@ -22,7 +26,12 @@ export class UnitsService {
 
   findOne(id: string, actor: JwtAccessPayload) {
     return this.prisma.withUserRls(actor, async (tx) => {
-      const row = await tx.unit.findUnique({ where: { id } });
+      const row = await tx.unit.findUnique({
+        where: { id },
+        include: {
+          floor: { select: { buildingId: true } },
+        },
+      });
       if (!row) {
         throw new NotFoundException('Unit not found');
       }
@@ -31,17 +40,51 @@ export class UnitsService {
   }
 
   create(actor: JwtAccessPayload, dto: CreateUnitDto) {
-    return this.prisma.withUserRls(actor, (tx) =>
-      tx.unit.create({
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const agg = await tx.unit.aggregate({
+        where: { floorId: dto.floorId },
+        _max: { sortOrder: true },
+      });
+      const nextOrder = (agg._max.sortOrder ?? -1) + 1;
+      return tx.unit.create({
         data: {
           floorId: dto.floorId,
           code: dto.code.trim(),
           type: dto.type.trim(),
           rentableArea: dto.rentableArea,
           status: dto.status,
+          sortOrder: nextOrder,
         },
-      }),
-    );
+      });
+    });
+  }
+
+  reorder(floorId: string, orderedIds: string[], actor: JwtAccessPayload) {
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const rows = await tx.unit.findMany({
+        where: { floorId },
+        select: { id: true },
+      });
+      const expected = new Set(rows.map((r) => r.id));
+      if (orderedIds.length !== expected.size) {
+        throw new BadRequestException(
+          'unitIds must list each unit on the floor exactly once',
+        );
+      }
+      for (const id of orderedIds) {
+        if (!expected.has(id)) {
+          throw new BadRequestException(
+            'unitIds must belong to the selected floor',
+          );
+        }
+      }
+      await Promise.all(
+        orderedIds.map((id, i) =>
+          tx.unit.update({ where: { id }, data: { sortOrder: i } }),
+        ),
+      );
+      return { ok: true as const };
+    });
   }
 
   update(id: string, actor: JwtAccessPayload, dto: UpdateUnitDto) {

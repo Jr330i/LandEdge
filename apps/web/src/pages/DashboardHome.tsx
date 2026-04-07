@@ -84,14 +84,8 @@ export function DashboardHome() {
     orgsErr,
     portfolios,
     portfoliosErr,
-    tenants,
-    tenantsErr,
-    leases,
-    leasesErr,
-    billingInvoices,
-    billingInvoicesErr,
-    ledgerEntries,
-    ledgerErr,
+    dashboardMetrics,
+    dashboardMetricsErr,
   } = useDashboard()
 
   return (
@@ -155,27 +149,27 @@ export function DashboardHome() {
       >
         <StatTile
           label="Tenants"
-          value={tenants?.length ?? '—'}
+          value={dashboardMetrics?.tenants ?? '—'}
           icon={<PeopleOutlineOutlined fontSize="small" />}
-          loading={tenants === null && !tenantsErr}
+          loading={dashboardMetrics === null && !dashboardMetricsErr}
         />
         <StatTile
           label="Leases"
-          value={leases?.length ?? '—'}
+          value={dashboardMetrics?.leases ?? '—'}
           icon={<AssignmentOutlined fontSize="small" />}
-          loading={leases === null && !leasesErr}
+          loading={dashboardMetrics === null && !dashboardMetricsErr}
         />
         <StatTile
           label="Invoices"
-          value={billingInvoices?.length ?? '—'}
+          value={dashboardMetrics?.invoices ?? '—'}
           icon={<ReceiptLongOutlined fontSize="small" />}
-          loading={billingInvoices === null && !billingInvoicesErr}
+          loading={dashboardMetrics === null && !dashboardMetricsErr}
         />
         <StatTile
           label="Ledger lines"
-          value={ledgerEntries?.length ?? '—'}
+          value={dashboardMetrics?.ledgerLines ?? '—'}
           icon={<SavingsOutlined fontSize="small" />}
-          loading={ledgerEntries === null && !ledgerErr}
+          loading={dashboardMetrics === null && !dashboardMetricsErr}
         />
       </Stack>
 

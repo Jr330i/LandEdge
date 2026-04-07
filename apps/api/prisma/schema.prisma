@@ -79,6 +79,7 @@ model Building {
   address     String?
   latitude    Decimal?  @db.Decimal(10, 7)
   longitude   Decimal?  @db.Decimal(10, 7)
+  sortOrder   Int       @default(0) @map("sort_order")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   floors      Floor[]
@@ -92,6 +93,7 @@ model Floor {
   building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   name       String
   level      Int?
+  sortOrder  Int      @default(0) @map("sort_order")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
   units      Unit[]
@@ -116,6 +118,7 @@ model Unit {
   type         String
   rentableArea Decimal?    @map("rentable_area") @db.Decimal(14, 4)
   status       UnitStatus  @default(VACANT)
+  sortOrder    Int         @default(0) @map("sort_order")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
   leaseUnits   LeaseUnit[]
@@ -219,6 +222,7 @@ model ChargeSchedule {
   startDate      DateTime         @map("start_date") @db.Date
   endDate        DateTime?        @map("end_date") @db.Date
   active         Boolean          @default(true)
+  sortOrder      Int              @default(0) @map("sort_order")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
   invoiceLines   InvoiceLine[]

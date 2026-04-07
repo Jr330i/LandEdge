@@ -4,6 +4,13 @@ export type Health = {
   timestamp: string
 }
 
+export type DashboardMetrics = {
+  leases: number
+  tenants: number
+  invoices: number
+  ledgerLines: number
+}
+
 export type LoginUser = {
   id: string
   email: string
@@ -23,6 +30,7 @@ export type OrganizationRow = {
 
 export type PortfolioRow = {
   id: string
+  organizationId: string
   name: string
   region: string | null
   createdAt: string
@@ -36,6 +44,7 @@ export type BuildingRow = {
   address: string | null
   latitude?: string | number | null
   longitude?: string | number | null
+  sortOrder?: number
   _count: { floors: number }
 }
 
@@ -44,6 +53,7 @@ export type FloorRow = {
   buildingId: string
   name: string
   level: number | null
+  sortOrder?: number
   _count: { units: number }
 }
 
@@ -54,6 +64,7 @@ export type UnitRow = {
   type: string
   rentableArea?: string | number | null
   status: string
+  sortOrder?: number
   floor: { buildingId: string }
 }
 
@@ -95,6 +106,7 @@ export type ChargeScheduleRow = {
   active: boolean
   startDate: string
   endDate: string | null
+  sortOrder?: number
 }
 
 export type BillingInvoiceRow = {
@@ -103,7 +115,49 @@ export type BillingInvoiceRow = {
   periodStart: string
   periodEnd: string
   currency: string
-  lines: { description: string; amount: string }[]
+  lines: { description: string; amount: string; chargeScheduleId?: string | null }[]
+  tenant?: {
+    id: string
+    legalName: string
+    tradingName: string | null
+  }
+  lease?: { id: string; status: string }
+}
+
+/** `GET /billing/invoices/:id` — full invoice for detail view */
+export type BillingInvoiceDetailRow = {
+  id: string
+  organizationId: string
+  leaseId: string
+  tenantId: string
+  status: string
+  periodStart: string
+  periodEnd: string
+  dueDate: string | null
+  currency: string
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  lines: {
+    id: string
+    description: string
+    amount: string
+    chargeScheduleId: string | null
+  }[]
+  lease: { id: string; status: string }
+  tenant: {
+    id: string
+    legalName: string
+    tradingName: string | null
+  }
+  ledgerEntry: {
+    id: string
+    narrative: string
+    signedAmount: string
+    currency: string
+    source: string
+    createdAt: string
+  } | null
 }
 
 export type LedgerEntryRow = {
@@ -114,6 +168,12 @@ export type LedgerEntryRow = {
   source: string
   createdAt: string
   leaseId: string
+  tenant?: {
+    id: string
+    legalName: string
+    tradingName: string | null
+  }
+  lease?: { id: string }
 }
 
 export const PROPERTY_WRITE_ROLES = new Set([

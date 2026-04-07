@@ -28,7 +28,7 @@ export class ChargeSchedulesService {
       }
       return tx.chargeSchedule.findMany({
         where: { leaseId },
-        orderBy: { startDate: 'asc' },
+        orderBy: [{ sortOrder: 'asc' }, { startDate: 'asc' }, { kind: 'asc' }, { id: 'asc' }],
       });
     });
   }
@@ -52,6 +52,12 @@ export class ChargeSchedulesService {
         throw new NotFoundException('Lease not found');
       }
 
+      const agg = await tx.chargeSchedule.aggregate({
+        where: { leaseId: lease.id },
+        _max: { sortOrder: true },
+      });
+      const nextOrder = (agg._max.sortOrder ?? -1) + 1;
+
       return tx.chargeSchedule.create({
         data: {
           organizationId: lease.organizationId,
@@ -64,8 +70,53 @@ export class ChargeSchedulesService {
           startDate: start,
           endDate: end,
           active: dto.active ?? true,
+          sortOrder: nextOrder,
         },
       });
+    });
+  }
+
+  reorder(
+    leaseId: string,
+    orderedIds: string[],
+    actor: JwtAccessPayload,
+  ) {
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const lease = await tx.lease.findUnique({ where: { id: leaseId } });
+      if (!lease) {
+        throw new NotFoundException('Lease not found');
+      }
+      if (
+        actor.role !== UserRole.SUPER_ADMIN &&
+        lease.organizationId !== actor.organizationId
+      ) {
+        throw new NotFoundException('Lease not found');
+      }
+
+      const rows = await tx.chargeSchedule.findMany({
+        where: { leaseId },
+        select: { id: true },
+      });
+      const expected = new Set(rows.map((r) => r.id));
+      if (orderedIds.length !== expected.size) {
+        throw new BadRequestException(
+          'chargeScheduleIds must list each schedule on the lease exactly once',
+        );
+      }
+      for (const id of orderedIds) {
+        if (!expected.has(id)) {
+          throw new BadRequestException(
+            'chargeScheduleIds must belong to the selected lease',
+          );
+        }
+      }
+
+      await Promise.all(
+        orderedIds.map((id, i) =>
+          tx.chargeSchedule.update({ where: { id }, data: { sortOrder: i } }),
+        ),
+      );
+      return { ok: true as const };
     });
   }
 
@@ -88,7 +139,10 @@ export class ChargeSchedulesService {
         startDate = new Date(dto.startDate);
       }
       if (dto.endDate !== undefined) {
-        endDate = new Date(dto.endDate);
+        endDate =
+          dto.endDate === null || dto.endDate === ''
+            ? null
+            : new Date(dto.endDate);
       }
       if (endDate && endDate < startDate) {
         throw new BadRequestException('endDate must be on or after startDate');

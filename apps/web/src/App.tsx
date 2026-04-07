@@ -1,17 +1,13 @@
-import type { SelectChangeEvent } from '@mui/material'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { DashboardContext, type DashboardContextValue } from './dashboard/context'
 import type {
   BillingInvoiceRow,
-  ChargeScheduleRow,
+  DashboardMetrics,
   Health,
-  LeaseRow,
-  LedgerEntryRow,
   LoginUser,
   OrganizationRow,
   PortfolioRow,
-  TenantRow,
 } from './dashboard/types'
 import {
   BILLING_WRITE_ROLES,
@@ -26,6 +22,7 @@ import {
 } from './lib/auth'
 import { DashboardHome } from './pages/DashboardHome'
 import {
+  BillingInvoiceDetailPage,
   BillingInvoicesPage,
   BillingLedgerPage,
   BillingSchedulesPage,
@@ -54,23 +51,14 @@ function App() {
   const [portfolios, setPortfolios] = useState<PortfolioRow[] | null>(null)
   const [portfoliosErr, setPortfoliosErr] = useState<string | null>(null)
   const [newPortfolioName, setNewPortfolioName] = useState('')
+  const [newPortfolioOrganizationId, setNewPortfolioOrganizationId] = useState('')
   const [portfolioSaving, setPortfolioSaving] = useState(false)
-  const [tenants, setTenants] = useState<TenantRow[] | null>(null)
-  const [tenantsErr, setTenantsErr] = useState<string | null>(null)
-  const [leases, setLeases] = useState<LeaseRow[] | null>(null)
-  const [leasesErr, setLeasesErr] = useState<string | null>(null)
   const [leaseTenantFilter, setLeaseTenantFilter] = useState('')
   const [billingLeaseId, setBillingLeaseId] = useState('')
-  const [chargeSchedules, setChargeSchedules] = useState<ChargeScheduleRow[] | null>(
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(
     null,
   )
-  const [chargeSchedulesErr, setChargeSchedulesErr] = useState<string | null>(null)
-  const [billingInvoices, setBillingInvoices] = useState<BillingInvoiceRow[] | null>(
-    null,
-  )
-  const [billingInvoicesErr, setBillingInvoicesErr] = useState<string | null>(null)
-  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntryRow[] | null>(null)
-  const [ledgerErr, setLedgerErr] = useState<string | null>(null)
+  const [dashboardMetricsErr, setDashboardMetricsErr] = useState<string | null>(null)
   const [billingActionErr, setBillingActionErr] = useState<string | null>(null)
   const [generateMonth, setGenerateMonth] = useState(() => {
     const d = new Date()
@@ -126,10 +114,10 @@ function App() {
       .catch((e: Error) => setPortfoliosErr(e.message))
   }, [])
 
-  const loadTenants = useCallback((t: string) => {
-    setTenants(null)
-    setTenantsErr(null)
-    fetch('/api/v1/tenants', { headers: authHeaders(t) })
+  const loadDashboardMetrics = useCallback((t: string) => {
+    setDashboardMetrics(null)
+    setDashboardMetricsErr(null)
+    fetch('/api/v1/dashboard/metrics', { headers: authHeaders(t) })
       .then((r) => {
         if (r.status === 401) {
           sessionStorage.removeItem(TOKEN_KEY)
@@ -141,146 +129,26 @@ function App() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then((data: TenantRow[]) => setTenants(data))
-      .catch((e: Error) => setTenantsErr(e.message))
-  }, [])
-
-  const loadLeases = useCallback((t: string, tenantId?: string) => {
-    setLeases(null)
-    setLeasesErr(null)
-    const q =
-      tenantId && tenantId.length > 0
-        ? `?tenantId=${encodeURIComponent(tenantId)}`
-        : ''
-    fetch(`/api/v1/leases${q}`, { headers: authHeaders(t) })
-      .then((r) => {
-        if (r.status === 401) {
-          sessionStorage.removeItem(TOKEN_KEY)
-          sessionStorage.removeItem(USER_KEY)
-          setToken(null)
-          setMe(null)
-          throw new Error('Session expired — sign in again')
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((data: LeaseRow[]) => setLeases(data))
-      .catch((e: Error) => setLeasesErr(e.message))
-  }, [])
-
-  const loadChargeSchedules = useCallback((t: string, leaseId: string) => {
-    if (!leaseId) {
-      setChargeSchedules([])
-      setChargeSchedulesErr(null)
-      return
-    }
-    setChargeSchedules(null)
-    setChargeSchedulesErr(null)
-    fetch(
-      `/api/v1/billing/charge-schedules?leaseId=${encodeURIComponent(leaseId)}`,
-      { headers: authHeaders(t) },
-    )
-      .then((r) => {
-        if (r.status === 401) {
-          sessionStorage.removeItem(TOKEN_KEY)
-          sessionStorage.removeItem(USER_KEY)
-          setToken(null)
-          setMe(null)
-          throw new Error('Session expired — sign in again')
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((data: ChargeScheduleRow[]) => setChargeSchedules(data))
-      .catch((e: Error) => setChargeSchedulesErr(e.message))
-  }, [])
-
-  const loadBillingInvoices = useCallback((t: string) => {
-    setBillingInvoices(null)
-    setBillingInvoicesErr(null)
-    fetch('/api/v1/billing/invoices', { headers: authHeaders(t) })
-      .then((r) => {
-        if (r.status === 401) {
-          sessionStorage.removeItem(TOKEN_KEY)
-          sessionStorage.removeItem(USER_KEY)
-          setToken(null)
-          setMe(null)
-          throw new Error('Session expired — sign in again')
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((data: BillingInvoiceRow[]) => setBillingInvoices(data))
-      .catch((e: Error) => setBillingInvoicesErr(e.message))
-  }, [])
-
-  const loadLedger = useCallback((t: string) => {
-    setLedgerEntries(null)
-    setLedgerErr(null)
-    fetch('/api/v1/billing/ledger', { headers: authHeaders(t) })
-      .then((r) => {
-        if (r.status === 401) {
-          sessionStorage.removeItem(TOKEN_KEY)
-          sessionStorage.removeItem(USER_KEY)
-          setToken(null)
-          setMe(null)
-          throw new Error('Session expired — sign in again')
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((data: LedgerEntryRow[]) => setLedgerEntries(data))
-      .catch((e: Error) => setLedgerErr(e.message))
+      .then((data: DashboardMetrics) => setDashboardMetrics(data))
+      .catch((e: Error) => setDashboardMetricsErr(e.message))
   }, [])
 
   useEffect(() => {
     if (!token) {
       setOrgs(null)
       setPortfolios(null)
-      setTenants(null)
-      setLeases(null)
       setMe(null)
       setBillingLeaseId('')
-      setChargeSchedules(null)
-      setBillingInvoices(null)
-      setLedgerEntries(null)
+      setDashboardMetrics(null)
+      setDashboardMetricsErr(null)
       setBillingActionErr(null)
+      setNewPortfolioOrganizationId('')
       return
     }
     loadOrganizations(token)
     loadPortfolios(token)
-    loadTenants(token)
-    loadBillingInvoices(token)
-    loadLedger(token)
-  }, [
-    token,
-    loadOrganizations,
-    loadPortfolios,
-    loadTenants,
-    loadBillingInvoices,
-    loadLedger,
-  ])
-
-  useEffect(() => {
-    if (!token) return
-    loadLeases(token, leaseTenantFilter || undefined)
-  }, [token, leaseTenantFilter, loadLeases])
-
-  useEffect(() => {
-    if (!leases) return
-    if (leases.length === 0) {
-      setBillingLeaseId('')
-      return
-    }
-    if (!billingLeaseId || !leases.some((l) => l.id === billingLeaseId)) {
-      setBillingLeaseId(leases[0].id)
-    }
-  }, [leases, billingLeaseId])
-
-  useEffect(() => {
-    if (!token) return
-    loadChargeSchedules(token, billingLeaseId)
-  }, [token, billingLeaseId, loadChargeSchedules])
+    loadDashboardMetrics(token)
+  }, [token, loadOrganizations, loadPortfolios, loadDashboardMetrics])
 
   const handleLogin = (e: FormEvent) => {
     e.preventDefault()
@@ -296,12 +164,17 @@ function App() {
       }),
     })
       .then(async (r) => {
-        const body = await r.json().catch(() => ({}))
+        const body = (await r.json().catch(() => ({}))) as {
+          message?: string | string[]
+        }
         if (!r.ok) {
+          const m = body.message
           const msg =
-            typeof body.message === 'string'
-              ? body.message
-              : 'Sign-in failed'
+            typeof m === 'string'
+              ? m
+              : Array.isArray(m)
+                ? m.join('; ')
+                : 'Sign-in failed'
           throw new Error(msg)
         }
         return body as {
@@ -315,7 +188,20 @@ function App() {
         setToken(access_token)
         setMe(user)
       })
-      .catch((err: Error) => setLoginErr(err.message))
+      .catch((err: Error) => {
+        const m = err.message
+        if (
+          m === 'Failed to fetch' ||
+          m === 'Load failed' ||
+          m === 'NetworkError when attempting to fetch resource.'
+        ) {
+          setLoginErr(
+            'Cannot reach the API. Start the API (`npm run dev:api`), use the Vite dev app URL (e.g. http://localhost:5173), and ensure Postgres is up with migrations + seed.',
+          )
+        } else {
+          setLoginErr(m)
+        }
+      })
       .finally(() => setLoginLoading(false))
   }
 
@@ -326,34 +212,29 @@ function App() {
     setMe(null)
     setOrgs(null)
     setPortfolios(null)
-    setTenants(null)
-    setLeases(null)
     setLeaseTenantFilter('')
     setBillingLeaseId('')
-    setChargeSchedules(null)
-    setBillingInvoices(null)
-    setLedgerEntries(null)
+    setDashboardMetrics(null)
+    setDashboardMetricsErr(null)
     setBillingActionErr(null)
+    setNewPortfolioName('')
+    setNewPortfolioOrganizationId('')
   }
-
-  const onLeaseTenantFilterChange = (e: SelectChangeEvent<string>) => {
-    setLeaseTenantFilter(e.target.value)
-  }
-
-  const reloadLeases = useCallback(() => {
-    if (!token) return
-    loadLeases(token, leaseTenantFilter || undefined)
-  }, [token, leaseTenantFilter, loadLeases])
-
-  const reloadTenants = useCallback(() => {
-    if (!token) return
-    loadTenants(token)
-  }, [token, loadTenants])
 
   const reloadPortfolios = useCallback(() => {
     if (!token) return
     loadPortfolios(token)
   }, [token, loadPortfolios])
+
+  const reloadOrganizations = useCallback(() => {
+    if (!token) return
+    loadOrganizations(token)
+  }, [token, loadOrganizations])
+
+  const reloadDashboardMetrics = useCallback(() => {
+    if (!token) return
+    loadDashboardMetrics(token)
+  }, [token, loadDashboardMetrics])
 
   const canWriteProperty =
     me != null && PROPERTY_WRITE_ROLES.has(me.role)
@@ -363,13 +244,22 @@ function App() {
     if (!token || !newPortfolioName.trim()) return
     setPortfolioSaving(true)
     setPortfoliosErr(null)
+    const body: Record<string, string> = { name: newPortfolioName.trim() }
+    if (me?.role === 'SUPER_ADMIN' && orgs?.length) {
+      const oid =
+        newPortfolioOrganizationId &&
+        orgs.some((o) => o.id === newPortfolioOrganizationId)
+          ? newPortfolioOrganizationId
+          : orgs[0].id
+      body.organizationId = oid
+    }
     fetch('/api/v1/portfolios', {
       method: 'POST',
       headers: {
         ...authHeaders(token),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name: newPortfolioName.trim() }),
+      body: JSON.stringify(body),
     })
       .then(async (r) => {
         if (r.status === 401) {
@@ -395,14 +285,10 @@ function App() {
   const canWriteBilling =
     me != null && BILLING_WRITE_ROLES.has(me.role)
 
-  const onBillingLeaseChange = (e: SelectChangeEvent<string>) => {
-    setBillingLeaseId(e.target.value)
-  }
-
-  const handleIssueInvoice = (invoiceId: string) => {
-    if (!token) return
+  const handleIssueInvoice = (invoiceId: string): Promise<void> => {
+    if (!token) return Promise.resolve()
     setBillingActionErr(null)
-    fetch(`/api/v1/billing/invoices/${invoiceId}/issue`, {
+    return fetch(`/api/v1/billing/invoices/${invoiceId}/issue`, {
       method: 'POST',
       headers: authHeaders(token),
     })
@@ -415,16 +301,18 @@ function App() {
         }
       })
       .then(() => {
-        loadBillingInvoices(token)
-        loadLedger(token)
+        loadDashboardMetrics(token)
       })
-      .catch((e: Error) => setBillingActionErr(e.message))
+      .catch((e: Error) => {
+        setBillingActionErr(e.message)
+        throw e
+      })
   }
 
-  const handleVoidInvoice = (invoiceId: string) => {
-    if (!token) return
+  const handleVoidInvoice = (invoiceId: string): Promise<void> => {
+    if (!token) return Promise.resolve()
     setBillingActionErr(null)
-    fetch(`/api/v1/billing/invoices/${invoiceId}/void`, {
+    return fetch(`/api/v1/billing/invoices/${invoiceId}/void`, {
       method: 'POST',
       headers: authHeaders(token),
     })
@@ -436,12 +324,15 @@ function App() {
           )
         }
       })
-      .then(() => loadBillingInvoices(token))
-      .catch((e: Error) => setBillingActionErr(e.message))
+      .then(() => loadDashboardMetrics(token))
+      .catch((e: Error) => {
+        setBillingActionErr(e.message)
+        throw e
+      })
   }
 
-  const handleGenerateFromSchedules = () => {
-    if (!token || !billingLeaseId) return
+  const handleGenerateFromSchedules = (): Promise<void> => {
+    if (!token || !billingLeaseId) return Promise.resolve()
     setBillingActionErr(null)
     setGenerateSaving(true)
     const [y, m] = generateMonth.split('-').map(Number)
@@ -449,7 +340,7 @@ function App() {
       .toISOString()
       .slice(0, 10)
     const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    fetch('/api/v1/billing/invoices/generate-from-schedules', {
+    return fetch('/api/v1/billing/invoices/generate-from-schedules', {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -469,28 +360,12 @@ function App() {
           )
         }
       })
-      .then(() => loadBillingInvoices(token))
-      .catch((e: Error) => setBillingActionErr(e.message))
+      .then(() => loadDashboardMetrics(token))
+      .catch((e: Error) => {
+        setBillingActionErr(e.message)
+        throw e
+      })
       .finally(() => setGenerateSaving(false))
-  }
-
-  const downloadLedgerCsv = () => {
-    if (!token) return
-    setBillingActionErr(null)
-    fetch('/api/v1/billing/ledger/export', { headers: authHeaders(token) })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.blob()
-      })
-      .then((blob) => {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'sofinda-ledger.csv'
-        a.click()
-        URL.revokeObjectURL(url)
-      })
-      .catch((e: Error) => setBillingActionErr(e.message))
   }
 
   const invoiceLineTotal = (inv: BillingInvoiceRow) =>
@@ -525,38 +400,30 @@ function App() {
     portfoliosErr,
     newPortfolioName,
     setNewPortfolioName,
+    newPortfolioOrganizationId,
+    setNewPortfolioOrganizationId,
     portfolioSaving,
-    tenants,
-    tenantsErr,
-    leases,
-    leasesErr,
     leaseTenantFilter,
+    setLeaseTenantFilter,
     billingLeaseId,
     setBillingLeaseId,
-    chargeSchedules,
-    chargeSchedulesErr,
-    billingInvoices,
-    billingInvoicesErr,
-    ledgerEntries,
-    ledgerErr,
     billingActionErr,
     setBillingActionErr,
     generateMonth,
     setGenerateMonth,
     generateSaving,
+    dashboardMetrics,
+    dashboardMetricsErr,
     signOut,
-    onLeaseTenantFilterChange,
-    reloadLeases,
-    reloadTenants,
     reloadPortfolios,
+    reloadOrganizations,
+    reloadDashboardMetrics,
     canWriteProperty,
     handleCreatePortfolio,
     canWriteBilling,
-    onBillingLeaseChange,
     handleIssueInvoice,
     handleVoidInvoice,
     handleGenerateFromSchedules,
-    downloadLedgerCsv,
     invoiceLineTotal,
   }
 
@@ -571,6 +438,7 @@ function App() {
             <Route path="tenants" element={<TenantsPage />} />
             <Route path="leases" element={<LeasesPage />} />
             <Route path="billing/schedules" element={<BillingSchedulesPage />} />
+            <Route path="billing/invoices/:invoiceId" element={<BillingInvoiceDetailPage />} />
             <Route path="billing/invoices" element={<BillingInvoicesPage />} />
             <Route path="billing/ledger" element={<BillingLedgerPage />} />
           </Route>

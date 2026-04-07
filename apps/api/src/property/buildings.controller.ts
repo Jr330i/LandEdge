@@ -25,6 +25,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { PROPERTY_WRITE_ROLES } from './property.constants';
 import { BuildingsService } from './buildings.service';
 import { CreateBuildingDto } from './dto/create-building.dto';
+import { ReorderBuildingsDto } from './dto/reorder-buildings.dto';
 import { UpdateBuildingDto } from './dto/update-building.dto';
 
 @ApiTags('buildings')
@@ -50,6 +51,17 @@ export class BuildingsController {
     @CurrentUser() user: JwtAccessPayload,
   ) {
     return this.buildingsService.findOne(id, user);
+  }
+
+  @Post('reorder')
+  @UseGuards(RolesGuard)
+  @Roles(...PROPERTY_WRITE_ROLES)
+  @ApiOperation({ summary: 'Reorder buildings within a portfolio' })
+  reorder(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: ReorderBuildingsDto,
+  ) {
+    return this.buildingsService.reorder(dto.portfolioId, dto.buildingIds, user);
   }
 
   @Post()
