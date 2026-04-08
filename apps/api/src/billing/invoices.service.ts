@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import nodemailer from 'nodemailer';
 import {
   InvoiceStatus,
   LedgerSource,
@@ -13,6 +14,9 @@ import type { JwtAccessPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { GenerateInvoiceFromSchedulesDto } from './dto/generate-invoice-from-schedules.dto';
+import { AllocateInvoicePaymentDto } from './dto/allocate-invoice-payment.dto';
+import { ReverseInvoicePaymentDto } from './dto/reverse-invoice-payment.dto';
+import { SendInvoiceEmailDto } from './dto/send-invoice-email.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { renderInvoicePdf } from './invoice-pdf.builder';
 
@@ -43,6 +47,14 @@ type InvoiceListParams = {
 @Injectable()
 export class InvoicesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private paymentTag(invoiceId: string): string {
+    return `INV:${invoiceId}`;
+  }
+
+  private paymentReverseTag(paymentId: string): string {
+    return `REV:${paymentId}`;
+  }
 
   private buildListWhere(
     actor: JwtAccessPayload,
@@ -256,6 +268,102 @@ export class InvoicesService {
     });
   }
 
+  activity(id: string, actor: JwtAccessPayload) {
+    const tag = this.paymentTag(id).toUpperCase();
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const inv = await tx.invoice.findUnique({
+        where: { id },
+        include: { ledgerEntry: true },
+      });
+      if (!inv) {
+        throw new NotFoundException('Invoice not found');
+      }
+      if (
+        actor.role !== UserRole.SUPER_ADMIN &&
+        inv.organizationId !== actor.organizationId
+      ) {
+        throw new NotFoundException('Invoice not found');
+      }
+
+      const rows = await tx.ledgerEntry.findMany({
+        where: {
+          leaseId: inv.leaseId,
+          OR: [
+            { invoiceId: inv.id },
+            { narrative: { contains: tag, mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const events: Array<{
+        id: string;
+        kind: string;
+        at: Date;
+        amount: string | null;
+        currency: string | null;
+        detail: string;
+      }> = [
+        {
+          id: `inv-created-${inv.id}`,
+          kind: 'INVOICE_CREATED',
+          at: inv.createdAt,
+          amount: null,
+          currency: null,
+          detail: `Invoice created (${inv.status})`,
+        },
+      ];
+      if (inv.updatedAt.getTime() !== inv.createdAt.getTime()) {
+        events.push({
+          id: `inv-updated-${inv.id}`,
+          kind: 'INVOICE_UPDATED',
+          at: inv.updatedAt,
+          amount: null,
+          currency: null,
+          detail: 'Invoice updated',
+        });
+      }
+      if (inv.ledgerEntry) {
+        events.push({
+          id: `inv-issued-${inv.ledgerEntry.id}`,
+          kind: 'INVOICE_ISSUED',
+          at: inv.ledgerEntry.createdAt,
+          amount: inv.ledgerEntry.signedAmount.toFixed(2),
+          currency: inv.ledgerEntry.currency,
+          detail: inv.ledgerEntry.narrative,
+        });
+      }
+      for (const r of rows) {
+        const narrativeUpper = r.narrative.toUpperCase();
+        const hasInvTag = narrativeUpper.includes(tag);
+        if (!hasInvTag && r.invoiceId !== inv.id) continue;
+        if (r.source === LedgerSource.PAYMENT && hasInvTag) {
+          events.push({
+            id: `pay-${r.id}`,
+            kind: 'PAYMENT_ALLOCATED',
+            at: r.createdAt,
+            amount: r.signedAmount.abs().toFixed(2),
+            currency: r.currency,
+            detail: r.narrative,
+          });
+          continue;
+        }
+        if (r.source === LedgerSource.ADJUSTMENT && hasInvTag) {
+          const m = r.narrative.match(/REV:([0-9a-f-]{36})/i);
+          events.push({
+            id: `adj-${r.id}`,
+            kind: m ? 'PAYMENT_REVERSED' : 'ADJUSTMENT',
+            at: r.createdAt,
+            amount: r.signedAmount.abs().toFixed(2),
+            currency: r.currency,
+            detail: r.narrative,
+          });
+        }
+      }
+      return events.sort((a, b) => b.at.getTime() - a.at.getTime());
+    });
+  }
+
   buildPdf(id: string, actor: JwtAccessPayload): Promise<Buffer> {
     return this.prisma.withUserRls(actor, async (tx) => {
       const row = await tx.invoice.findUnique({
@@ -263,7 +371,7 @@ export class InvoicesService {
         include: {
           lines: { orderBy: { createdAt: 'asc' } },
           tenant: { select: { legalName: true, tradingName: true } },
-          organization: { select: { name: true } },
+          organization: { select: { name: true, settings: true } },
         },
       });
       if (!row) {
@@ -277,6 +385,241 @@ export class InvoicesService {
       }
       return renderInvoicePdf(row);
     });
+  }
+
+  listPayments(id: string, actor: JwtAccessPayload) {
+    const tag = this.paymentTag(id);
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const inv = await tx.invoice.findUnique({
+        where: { id },
+        select: { id: true, organizationId: true, leaseId: true },
+      });
+      if (!inv) {
+        throw new NotFoundException('Invoice not found');
+      }
+      if (
+        actor.role !== UserRole.SUPER_ADMIN &&
+        inv.organizationId !== actor.organizationId
+      ) {
+        throw new NotFoundException('Invoice not found');
+      }
+      const payments = await tx.ledgerEntry.findMany({
+        where: {
+          leaseId: inv.leaseId,
+          source: LedgerSource.PAYMENT,
+          narrative: { contains: tag, mode: 'insensitive' },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (payments.length === 0) return [];
+      const reversals = await tx.ledgerEntry.findMany({
+        where: {
+          leaseId: inv.leaseId,
+          source: LedgerSource.ADJUSTMENT,
+          narrative: { contains: tag, mode: 'insensitive' },
+        },
+        select: {
+          id: true,
+          narrative: true,
+          createdAt: true,
+          signedAmount: true,
+        },
+      });
+      const reversedByPaymentId = new Map<
+        string,
+        {
+          id: string;
+          createdAt: Date;
+          signedAmount: Prisma.Decimal;
+          reason: string | null;
+        }
+      >();
+      for (const r of reversals) {
+        const m = r.narrative.match(
+          /REV:([0-9a-f-]{36})(?:\s+([\s\S]*))?$/i,
+        );
+        const paymentId = m?.[1];
+        if (!paymentId) continue;
+        reversedByPaymentId.set(paymentId, {
+          id: r.id,
+          createdAt: r.createdAt,
+          signedAmount: r.signedAmount,
+          reason: m?.[2]?.trim() || null,
+        });
+      }
+      return payments.map((p) => ({
+        ...p,
+        reversed: reversedByPaymentId.has(p.id),
+        reversal: reversedByPaymentId.get(p.id) ?? null,
+      }));
+    });
+  }
+
+  allocatePayment(
+    id: string,
+    actor: JwtAccessPayload,
+    dto: AllocateInvoicePaymentDto,
+  ) {
+    const tag = this.paymentTag(id);
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const inv = await tx.invoice.findUnique({ where: { id } });
+      if (!inv) {
+        throw new NotFoundException('Invoice not found');
+      }
+      if (
+        actor.role !== UserRole.SUPER_ADMIN &&
+        inv.organizationId !== actor.organizationId
+      ) {
+        throw new NotFoundException('Invoice not found');
+      }
+      if (inv.status !== InvoiceStatus.ISSUED) {
+        throw new BadRequestException('Only issued invoices can receive payments');
+      }
+
+      const narrative = `${tag} ${dto.narrative?.trim() || 'Payment allocation'}`;
+      return tx.ledgerEntry.create({
+        data: {
+          organizationId: inv.organizationId,
+          leaseId: inv.leaseId,
+          tenantId: inv.tenantId,
+          invoiceId: null,
+          narrative,
+          signedAmount: new Prisma.Decimal(String(-Math.abs(dto.amount))),
+          currency: inv.currency,
+          source: LedgerSource.PAYMENT,
+        },
+      });
+    });
+  }
+
+  reversePayment(
+    id: string,
+    paymentId: string,
+    actor: JwtAccessPayload,
+    dto: ReverseInvoicePaymentDto,
+  ) {
+    const tag = this.paymentTag(id);
+    const reverseTag = this.paymentReverseTag(paymentId);
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const inv = await tx.invoice.findUnique({ where: { id } });
+      if (!inv) throw new NotFoundException('Invoice not found');
+      if (
+        actor.role !== UserRole.SUPER_ADMIN &&
+        inv.organizationId !== actor.organizationId
+      ) {
+        throw new NotFoundException('Invoice not found');
+      }
+      const payment = await tx.ledgerEntry.findUnique({ where: { id: paymentId } });
+      if (!payment || payment.source !== LedgerSource.PAYMENT) {
+        throw new NotFoundException('Payment not found');
+      }
+      if (
+        payment.leaseId !== inv.leaseId ||
+        !payment.narrative.toUpperCase().includes(tag.toUpperCase())
+      ) {
+        throw new BadRequestException('Payment does not belong to this invoice');
+      }
+      const existingReverse = await tx.ledgerEntry.findFirst({
+        where: {
+          leaseId: inv.leaseId,
+          source: LedgerSource.ADJUSTMENT,
+          narrative: { contains: reverseTag, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (existingReverse) {
+        throw new BadRequestException('Payment is already reversed');
+      }
+      const reason = dto.reason?.trim() || 'Payment reversal';
+      const amount = Math.abs(Number(payment.signedAmount));
+      return tx.ledgerEntry.create({
+        data: {
+          organizationId: inv.organizationId,
+          leaseId: inv.leaseId,
+          tenantId: inv.tenantId,
+          invoiceId: null,
+          narrative: `${tag} ${reverseTag} ${reason}`,
+          signedAmount: new Prisma.Decimal(String(amount)),
+          currency: inv.currency,
+          source: LedgerSource.ADJUSTMENT,
+        },
+      });
+    });
+  }
+
+  async sendEmail(
+    id: string,
+    actor: JwtAccessPayload,
+    dto: SendInvoiceEmailDto,
+  ): Promise<{ ok: true; to: string }> {
+    const host = process.env.SMTP_HOST?.trim();
+    const port = Number.parseInt(process.env.SMTP_PORT ?? '587', 10);
+    const user = process.env.SMTP_USER?.trim();
+    const pass = process.env.SMTP_PASS?.trim();
+    const from = process.env.SMTP_FROM?.trim() || user;
+    if (!host || !Number.isFinite(port) || !from) {
+      throw new BadRequestException(
+        'Email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER/SMTP_PASS, and SMTP_FROM.',
+      );
+    }
+
+    const row = await this.prisma.withUserRls(actor, async (tx) => {
+      const found = await tx.invoice.findUnique({
+        where: { id },
+        include: {
+          lines: { orderBy: { createdAt: 'asc' } },
+          tenant: {
+            select: { legalName: true, tradingName: true, contactEmail: true },
+          },
+          organization: { select: { name: true, settings: true } },
+        },
+      });
+      if (!found) throw new NotFoundException('Invoice not found');
+      if (
+        actor.role !== UserRole.SUPER_ADMIN &&
+        found.organizationId !== actor.organizationId
+      ) {
+        throw new NotFoundException('Invoice not found');
+      }
+      return found;
+    });
+
+    const to = dto.to?.trim() || row.tenant.contactEmail?.trim();
+    if (!to) {
+      throw new BadRequestException(
+        'Tenant has no contact email. Provide "to" in request body.',
+      );
+    }
+
+    const tenantLabel = row.tenant.tradingName || row.tenant.legalName;
+    const subject =
+      dto.subject?.trim() ||
+      `Invoice ${id.slice(0, 8)} · ${row.organization.name}`;
+    const message =
+      dto.message?.trim() ||
+      `Hi ${tenantLabel},\n\nPlease find your invoice attached.\n\nRegards,\n${row.organization.name}`;
+    const pdf = await renderInvoicePdf(row);
+
+    const transport = nodemailer.createTransport({
+      host,
+      port,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: user && pass ? { user, pass } : undefined,
+    });
+    await transport.sendMail({
+      from,
+      to,
+      subject,
+      text: message,
+      attachments: [
+        {
+          filename: `sofinda-invoice-${id.slice(0, 8)}.pdf`,
+          content: pdf,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+    return { ok: true, to };
   }
 
   create(actor: JwtAccessPayload, dto: CreateInvoiceDto) {

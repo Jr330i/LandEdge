@@ -8,6 +8,8 @@ import {
   IsEnum,
   IsObject,
   IsOptional,
+  IsUUID,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { LeaseUnitLineDto } from './lease-unit-line.dto';
@@ -32,6 +34,15 @@ export class UpdateLeaseDto {
   @IsOptional()
   @IsObject()
   terms?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Set to null to clear the assigned collection broker.',
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsUUID()
+  brokerUserId?: string | null;
 
   @ApiPropertyOptional({
     type: [LeaseUnitLineDto],

@@ -27,7 +27,9 @@ import {
   BillingLedgerPage,
   BillingSchedulesPage,
   LeasesPage,
+  MyProfilePage,
   OrganizationsPage,
+  PerformancePage,
   PortfoliosPage,
   TenantsPage,
 } from './pages/DetailPages'
@@ -434,6 +436,8 @@ function App() {
           <Route path="/" element={<DashboardShell />}>
             <Route index element={<DashboardHome />} />
             <Route path="organizations" element={<OrganizationsPage />} />
+            <Route path="profile" element={<MyProfilePage />} />
+            <Route path="performance" element={<PerformancePage />} />
             <Route path="portfolios" element={<PortfoliosPage />} />
             <Route path="tenants" element={<TenantsPage />} />
             <Route path="leases" element={<LeasesPage />} />

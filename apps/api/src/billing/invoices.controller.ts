@@ -24,8 +24,11 @@ import type { JwtAccessPayload } from '../auth/jwt.types';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { BILLING_WRITE_ROLES } from './billing.constants';
+import { AllocateInvoicePaymentDto } from './dto/allocate-invoice-payment.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { GenerateInvoiceFromSchedulesDto } from './dto/generate-invoice-from-schedules.dto';
+import { ReverseInvoicePaymentDto } from './dto/reverse-invoice-payment.dto';
+import { SendInvoiceEmailDto } from './dto/send-invoice-email.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
 
@@ -128,6 +131,29 @@ export class InvoicesController {
     });
   }
 
+  @Get(':id/payments')
+  @ApiOperation({
+    summary:
+      'List payment allocations recorded for this invoice (PAYMENT ledger lines tagged with invoice id)',
+  })
+  payments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.service.listPayments(id, user);
+  }
+
+  @Get(':id/activity')
+  @ApiOperation({
+    summary: 'Invoice + ledger activity timeline (audit feed)',
+  })
+  activity(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.service.activity(id, user);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get invoice by id' })
   findOne(
@@ -174,6 +200,47 @@ export class InvoicesController {
     @Body() dto: UpdateInvoiceDto,
   ) {
     return this.service.updateDraft(id, user, dto);
+  }
+
+  @Post(':id/send-email')
+  @UseGuards(RolesGuard)
+  @Roles(...BILLING_WRITE_ROLES)
+  @ApiOperation({ summary: 'Send invoice by email with PDF attachment' })
+  sendEmail(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: SendInvoiceEmailDto,
+  ) {
+    return this.service.sendEmail(id, user, dto);
+  }
+
+  @Post(':id/payments')
+  @UseGuards(RolesGuard)
+  @Roles(...BILLING_WRITE_ROLES)
+  @ApiOperation({
+    summary: 'Record payment allocation against an issued invoice',
+  })
+  allocatePayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: AllocateInvoicePaymentDto,
+  ) {
+    return this.service.allocatePayment(id, user, dto);
+  }
+
+  @Post(':id/payments/:paymentId/reverse')
+  @UseGuards(RolesGuard)
+  @Roles(...BILLING_WRITE_ROLES)
+  @ApiOperation({
+    summary: 'Reverse an allocated payment (append-only ADJUSTMENT entry)',
+  })
+  reversePayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: ReverseInvoicePaymentDto,
+  ) {
+    return this.service.reversePayment(id, paymentId, user, dto);
   }
 
   @Post(':id/issue')

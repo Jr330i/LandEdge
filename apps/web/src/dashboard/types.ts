@@ -11,6 +11,94 @@ export type DashboardMetrics = {
   ledgerLines: number
 }
 
+export type PerformanceReport = {
+  summary: {
+    tenants: number
+    avgHonestyRate: number | null
+    totalNetRecovered: number
+    avgCollectionScore: number
+  }
+  tenantLeaderboard: PerformanceTenantRow[]
+  staffLeaderboard: PerformanceStaffRow[]
+  employeeNote: string
+}
+
+export type PerformanceTenantRow = {
+  tenantId: string
+  tenantName: string
+  dueInvoices: number
+  onTimeInvoices: number
+  honestyRate: number | null
+  paymentsCount: number
+  reversalsCount: number
+  paymentsAmount: number
+  reversalAmount: number
+  netRecovered: number
+  recoveryEfficiency: number
+  collectionScore: number
+  organizationId?: string
+  organizationName?: string | null
+}
+
+export type PerformanceStaffRow = {
+  userId: string
+  email: string
+  displayName: string | null
+  role: string
+  assignedLeases: number
+  dueInvoices: number
+  onTimeInvoices: number
+  honestyRate: number | null
+  paymentsCount: number
+  reversalsCount: number
+  paymentsAmount: number
+  reversalAmount: number
+  netRecovered: number
+  recoveryEfficiency: number
+  collectionScore: number
+  organizationId?: string
+  organizationName?: string | null
+}
+
+export type OrgStaffUserRow = {
+  id: string
+  email: string
+  displayName: string | null
+  role: string
+}
+
+export type DashboardOrgStaffResponse = {
+  organizationId: string
+  users: OrgStaffUserRow[]
+}
+
+export type ProfileMetrics = {
+  user: {
+    id: string
+    email: string
+    role: string
+    organizationId: string
+  }
+  tenantHonesty: {
+    dueInvoices: number
+    onTimeInvoices: number
+    rate: number | null
+  }
+  recovery: {
+    paymentsCount: number
+    reversalsCount: number
+    paymentsAmount: number
+    reversalAmount: number
+    netRecovered: number
+  }
+  collectionScore: number
+  trend: {
+    label: string
+    collectionScore: number
+    netRecovered: number
+  }[]
+}
+
 export type LoginUser = {
   id: string
   email: string
@@ -24,6 +112,15 @@ export type OrganizationRow = {
   slug: string
   timezone: string
   baseCurrency: string
+  settings?: {
+    invoiceProfile?: {
+      legalName?: string | null
+      taxNumber?: string | null
+      bankDetails?: string | null
+      paymentInstructions?: string | null
+      logoUrl?: string | null
+    }
+  } | null
   createdAt: string
   _count: { users: number }
 }
@@ -70,6 +167,7 @@ export type UnitRow = {
 
 export type TenantRow = {
   id: string
+  organizationId?: string
   legalName: string
   tradingName: string | null
   contactEmail: string | null
@@ -79,6 +177,13 @@ export type TenantRow = {
 
 export type LeaseRow = {
   id: string
+  organizationId: string
+  brokerUserId?: string | null
+  brokerUser?: {
+    id: string
+    email: string
+    displayName: string | null
+  } | null
   status: string
   startDate: string
   endDate: string
@@ -176,6 +281,31 @@ export type LedgerEntryRow = {
   lease?: { id: string }
 }
 
+export type InvoicePaymentRow = {
+  id: string
+  narrative: string
+  signedAmount: string
+  currency: string
+  source: string
+  createdAt: string
+  reversed?: boolean
+  reversal?: {
+    id: string
+    createdAt: string
+    signedAmount: string
+    reason: string | null
+  } | null
+}
+
+export type InvoiceActivityRow = {
+  id: string
+  kind: string
+  at: string
+  amount: string | null
+  currency: string | null
+  detail: string
+}
+
 export const PROPERTY_WRITE_ROLES = new Set([
   'SUPER_ADMIN',
   'ORG_ADMIN',
@@ -186,4 +316,12 @@ export const BILLING_WRITE_ROLES = new Set([
   'SUPER_ADMIN',
   'ORG_ADMIN',
   'FINANCE',
+])
+
+/** Matches `GET /dashboard/performance` on the API */
+export const PERFORMANCE_VIEW_ROLES = new Set([
+  'SUPER_ADMIN',
+  'ORG_ADMIN',
+  'FINANCE',
+  'PORTFOLIO_MANAGER',
 ])

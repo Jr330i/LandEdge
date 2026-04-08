@@ -1,4 +1,5 @@
 import AddOutlined from '@mui/icons-material/AddOutlined'
+import PersonOutlineOutlined from '@mui/icons-material/PersonOutlineOutlined'
 import ContentCopyOutlined from '@mui/icons-material/ContentCopyOutlined'
 import ApartmentOutlined from '@mui/icons-material/ApartmentOutlined'
 import DeleteOutlineOutlined from '@mui/icons-material/DeleteOutlineOutlined'
@@ -12,7 +13,10 @@ import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
 import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined'
 import SearchOutlined from '@mui/icons-material/SearchOutlined'
 import SavingsOutlined from '@mui/icons-material/SavingsOutlined'
+import LeaderboardOutlined from '@mui/icons-material/LeaderboardOutlined'
+import VerifiedUserOutlined from '@mui/icons-material/VerifiedUserOutlined'
 import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined'
+import SendOutlined from '@mui/icons-material/SendOutlined'
 import Autocomplete from '@mui/material/Autocomplete'
 import {
   Alert,
@@ -47,6 +51,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material'
+import type { ChipProps } from '@mui/material'
 import {
   Link as RouterLink,
   useLocation,
@@ -67,6 +72,7 @@ import {
   leaseStatusChipColor,
   sectionCardHeaderOutlinedSx,
   SectionCard,
+  StatTile,
 } from '../components/DashboardUi'
 import { LeaseAsyncPicker } from '../components/LeaseAsyncPicker'
 import { TenantAsyncPicker } from '../components/TenantAsyncPicker'
@@ -75,12 +81,19 @@ import type {
   BillingInvoiceDetailRow,
   BillingInvoiceRow,
   ChargeScheduleRow,
+  DashboardOrgStaffResponse,
+  OrgStaffUserRow,
+  PerformanceReport,
+  ProfileMetrics,
+  InvoiceActivityRow,
+  InvoicePaymentRow,
   LeaseRow,
   LedgerEntryRow,
   OrganizationRow,
   PortfolioRow,
   TenantRow,
 } from '../dashboard/types'
+import { PERFORMANCE_VIEW_ROLES } from '../dashboard/types'
 import { readApiErrorMessage } from '../lib/apiError'
 import { authHeaders } from '../lib/auth'
 import { LeaseUnitCascadeFields } from './LeaseUnitCascadeFields'
@@ -179,6 +192,11 @@ function mergeLeaseTermsForPatch(
   return base
 }
 
+function orgStaffOptionLabel(u: OrgStaffUserRow): string {
+  const name = u.displayName?.trim()
+  return name ? `${name} (${u.email})` : u.email
+}
+
 function leaseTermsDisplayBlock(terms: unknown): string {
   const notes = leaseNotesFromTerms(terms)
   if (notes) return notes
@@ -218,6 +236,12 @@ function LeaseViewDialogBody({
       <Typography variant="body2">
         <strong>Units:</strong>{' '}
         {lease.leaseUnits.map(formatLeaseUnitCell).join(', ') || '—'}
+      </Typography>
+      <Typography variant="body2">
+        <strong>Collection broker:</strong>{' '}
+        {lease.brokerUser
+          ? lease.brokerUser.displayName?.trim() || lease.brokerUser.email
+          : '—'}
       </Typography>
       {termsBlock ? (
         <Box>
@@ -287,10 +311,484 @@ function PageHeader({ title }: { title: string }) {
   )
 }
 
+export function MyProfilePage() {
+  const { token, me, signOut } = useDashboard()
+  const [metrics, setMetrics] = useState<ProfileMetrics | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [trendMetric, setTrendMetric] = useState<'score' | 'recovered'>('score')
+
+  const reload = useCallback(() => {
+    if (!token) return
+    setLoading(true)
+    setErr(null)
+    fetch('/api/v1/dashboard/profile-metrics', { headers: authHeaders(token) })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<ProfileMetrics>
+      })
+      .then((data) => setMetrics(data))
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setLoading(false))
+  }, [token, signOut])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  const scoreTrendPoints = useMemo(() => {
+    const trend = metrics?.trend ?? []
+    if (trend.length === 0) return ''
+    const w = 520
+    const h = 160
+    const pad = 16
+    const maxX = Math.max(1, trend.length - 1)
+    const maxRecovered = Math.max(1, ...trend.map((m) => m.netRecovered))
+    return trend
+      .map((m, i) => {
+        const x = pad + (i / maxX) * (w - pad * 2)
+        const v =
+          trendMetric === 'score'
+            ? Math.max(0, Math.min(100, m.collectionScore))
+            : Math.max(0, m.netRecovered)
+        const normalized = trendMetric === 'score' ? v / 100 : v / maxRecovered
+        const y = h - pad - normalized * (h - pad * 2)
+        return `${x},${y}`
+      })
+      .join(' ')
+  }, [metrics?.trend, trendMetric])
+
+  return (
+    <>
+      <PageHeader title="My profile" />
+      <SectionCard
+        title="User details"
+        subtitle="Signed-in identity and current role."
+        icon={<PersonOutlineOutlined />}
+      >
+        <Stack spacing={1}>
+          <Typography variant="body2">
+            <strong>Name:</strong> {me?.displayName ?? '—'}
+          </Typography>
+          <Typography variant="body2">
+            <strong>Email:</strong> {me?.email ?? '—'}
+          </Typography>
+          <Typography variant="body2">
+            <strong>Role:</strong> {me?.role?.replace(/_/g, ' ') ?? '—'}
+          </Typography>
+        </Stack>
+      </SectionCard>
+
+      <Box sx={{ mt: 2 }}>
+        <SectionCard
+          title="Performance tracking"
+          subtitle="Tenant payment honesty and recovery KPIs scoped to your organization visibility."
+          icon={<VerifiedUserOutlined />}
+        >
+          {err ? (
+            <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+              {err}
+            </Alert>
+          ) : null}
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
+            <StatTile
+              label="Collection score"
+              value={
+                metrics
+                  ? `${metrics.collectionScore.toLocaleString(undefined, {
+                      maximumFractionDigits: 1,
+                    })}/100`
+                  : '—'
+              }
+              icon={<VerifiedUserOutlined fontSize="small" />}
+              loading={loading}
+              state={
+                !metrics
+                  ? 'default'
+                  : metrics.collectionScore >= 75
+                    ? 'success'
+                    : metrics.collectionScore < 50
+                      ? 'error'
+                      : 'default'
+              }
+            />
+            <StatTile
+              label="Tenant honesty rate"
+              value={
+                metrics?.tenantHonesty.rate == null
+                  ? '—'
+                  : `${(metrics.tenantHonesty.rate * 100).toLocaleString(undefined, {
+                      maximumFractionDigits: 1,
+                    })}%`
+              }
+              icon={<PeopleOutlineOutlined fontSize="small" />}
+              loading={loading}
+            />
+            <StatTile
+              label="Net recovered"
+              value={
+                metrics
+                  ? metrics.recovery.netRecovered.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })
+                  : '—'
+              }
+              icon={<SavingsOutlined fontSize="small" />}
+              loading={loading}
+            />
+          </Stack>
+          {metrics ? (
+            <Stack spacing={0.5} sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Due invoices: {metrics.tenantHonesty.dueInvoices} · On-time paid:{' '}
+                {metrics.tenantHonesty.onTimeInvoices}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Payment entries: {metrics.recovery.paymentsCount} · Reversals:{' '}
+                {metrics.recovery.reversalsCount}
+              </Typography>
+            </Stack>
+          ) : null}
+          <Box sx={{ mt: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2">
+              Progress (last 6 months)
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={trendMetric}
+                onChange={(_, v: 'score' | 'recovered' | null) => {
+                  if (v) setTrendMetric(v)
+                }}
+              >
+                <ToggleButton value="score">Collection score</ToggleButton>
+                <ToggleButton value="recovered">Net recovered</ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
+            {metrics && metrics.trend.length > 0 ? (
+              <>
+                <Box
+                  sx={{
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    p: 1,
+                    bgcolor: 'background.paper',
+                  }}
+                >
+                  <svg viewBox="0 0 520 160" width="100%" height={160}>
+                    <line x1="16" y1="144" x2="504" y2="144" stroke="#cbd5e1" strokeWidth="1" />
+                    <line x1="16" y1="16" x2="16" y2="144" stroke="#cbd5e1" strokeWidth="1" />
+                    <polyline
+                      points={scoreTrendPoints}
+                      fill="none"
+                      stroke={trendMetric === 'score' ? '#2563eb' : '#0d9488'}
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </Box>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                  {metrics.trend.map((m) => (
+                    <Chip
+                      key={m.label}
+                      size="small"
+                      variant="outlined"
+                      label={
+                        trendMetric === 'score'
+                          ? `${m.label}: ${m.collectionScore.toLocaleString(undefined, {
+                              maximumFractionDigits: 1,
+                            })}`
+                          : `${m.label}: ${m.netRecovered.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}`
+                      }
+                    />
+                  ))}
+                </Stack>
+              </>
+            ) : (
+              <Typography color="text.secondary">No trend data yet.</Typography>
+            )}
+          </Box>
+        </SectionCard>
+      </Box>
+    </>
+  )
+}
+
+export function PerformancePage() {
+  const { token, me, signOut } = useDashboard()
+  const [report, setReport] = useState<PerformanceReport | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const allowed = me != null && PERFORMANCE_VIEW_ROLES.has(me.role)
+
+  const reload = useCallback(() => {
+    if (!token || !allowed) return
+    setLoading(true)
+    setErr(null)
+    fetch('/api/v1/dashboard/performance', { headers: authHeaders(token) })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (r.status === 403) {
+          throw new Error('You do not have access to the performance dashboard.')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<PerformanceReport>
+      })
+      .then((data) => setReport(data))
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setLoading(false))
+  }, [token, signOut, allowed])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  if (!allowed) {
+    return (
+      <>
+        <PageHeader title="Performance" />
+        <Alert severity="info" variant="outlined">
+          This view is available to executive and finance roles (org admin, finance, portfolio
+          manager, or platform super admin).
+        </Alert>
+      </>
+    )
+  }
+
+  const showOrgCol = me?.role === 'SUPER_ADMIN'
+
+  return (
+    <>
+      <PageHeader title="Performance" />
+      <SectionCard
+        title="Organization leaderboard"
+        subtitle="Tenants ranked by collection score (on-time invoice payment vs recovery efficiency), scoped to your visibility."
+        icon={<LeaderboardOutlined />}
+      >
+        {err ? (
+          <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+            {err}
+          </Alert>
+        ) : null}
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
+          <StatTile
+            label="Tenants"
+            value={report ? String(report.summary.tenants) : '—'}
+            icon={<PeopleOutlineOutlined fontSize="small" />}
+            loading={loading}
+          />
+          <StatTile
+            label="Avg honesty (tenants with due invoices)"
+            value={
+              report?.summary.avgHonestyRate == null
+                ? '—'
+                : `${(report.summary.avgHonestyRate * 100).toLocaleString(undefined, {
+                    maximumFractionDigits: 1,
+                  })}%`
+            }
+            icon={<VerifiedUserOutlined fontSize="small" />}
+            loading={loading}
+          />
+          <StatTile
+            label="Total net recovered"
+            value={
+              report
+                ? report.summary.totalNetRecovered.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })
+                : '—'
+            }
+            icon={<SavingsOutlined fontSize="small" />}
+            loading={loading}
+          />
+          <StatTile
+            label="Avg collection score"
+            value={
+              report
+                ? `${report.summary.avgCollectionScore.toLocaleString(undefined, {
+                    maximumFractionDigits: 1,
+                  })}/100`
+                : '—'
+            }
+            icon={<LeaderboardOutlined fontSize="small" />}
+            loading={loading}
+          />
+        </Stack>
+
+        <TableContainer sx={{ mt: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>#</TableCell>
+                {showOrgCol ? <TableCell>Organization</TableCell> : null}
+                <TableCell>Tenant</TableCell>
+                <TableCell align="right">Due inv.</TableCell>
+                <TableCell align="right">On-time</TableCell>
+                <TableCell align="right">Honesty</TableCell>
+                <TableCell align="right">Net recovered</TableCell>
+                <TableCell align="right">Score</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading && !report ? (
+                <TableRow>
+                  <TableCell colSpan={showOrgCol ? 8 : 7}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 2 }}>
+                      <CircularProgress size={22} />
+                      <Typography variant="body2" color="text.secondary">
+                        Loading…
+                      </Typography>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {report?.tenantLeaderboard.map((row, i) => (
+                <TableRow key={row.tenantId} hover>
+                  <TableCell>{i + 1}</TableCell>
+                  {showOrgCol ? (
+                    <TableCell>{row.organizationName ?? row.organizationId ?? '—'}</TableCell>
+                  ) : null}
+                  <TableCell>
+                    <Button
+                      component={RouterLink}
+                      to={`/billing/invoices?tenantId=${row.tenantId}`}
+                      size="small"
+                      sx={{ textTransform: 'none', p: 0, minWidth: 0, fontWeight: 600 }}
+                    >
+                      {row.tenantName}
+                    </Button>
+                  </TableCell>
+                  <TableCell align="right">{row.dueInvoices}</TableCell>
+                  <TableCell align="right">{row.onTimeInvoices}</TableCell>
+                  <TableCell align="right">
+                    {row.honestyRate == null
+                      ? '—'
+                      : `${(row.honestyRate * 100).toLocaleString(undefined, {
+                          maximumFractionDigits: 1,
+                        })}%`}
+                  </TableCell>
+                  <TableCell align="right">
+                    {row.netRecovered.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell align="right">
+                    {row.collectionScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {report && report.tenantLeaderboard.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={showOrgCol ? 8 : 7}>
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                      No tenants in scope.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </SectionCard>
+
+      <Box sx={{ mt: 3 }}>
+        <SectionCard
+          title="Staff leaderboard"
+          subtitle="Metrics roll up to the collection broker assigned on each lease (same honesty and recovery rules as tenants)."
+          icon={<PersonOutlineOutlined />}
+        >
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {report?.employeeNote}
+          </Typography>
+          <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>#</TableCell>
+                  {showOrgCol ? <TableCell>Organization</TableCell> : null}
+                  <TableCell>User</TableCell>
+                  <TableCell>Role</TableCell>
+                  <TableCell align="right">Leases</TableCell>
+                  <TableCell align="right">Due inv.</TableCell>
+                  <TableCell align="right">On-time</TableCell>
+                  <TableCell align="right">Honesty</TableCell>
+                  <TableCell align="right">Net recovered</TableCell>
+                  <TableCell align="right">Score</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(report?.staffLeaderboard ?? []).map((row, i) => (
+                  <TableRow key={row.userId} hover>
+                    <TableCell>{i + 1}</TableCell>
+                    {showOrgCol ? (
+                      <TableCell>{row.organizationName ?? row.organizationId ?? '—'}</TableCell>
+                    ) : null}
+                    <TableCell>
+                      <Typography fontWeight={600} variant="body2">
+                        {row.displayName?.trim() || row.email}
+                      </Typography>
+                      {row.displayName?.trim() ? (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {row.email}
+                        </Typography>
+                      ) : null}
+                    </TableCell>
+                    <TableCell sx={{ textTransform: 'capitalize' }}>
+                      {row.role.replace(/_/g, ' ')}
+                    </TableCell>
+                    <TableCell align="right">{row.assignedLeases}</TableCell>
+                    <TableCell align="right">{row.dueInvoices}</TableCell>
+                    <TableCell align="right">{row.onTimeInvoices}</TableCell>
+                    <TableCell align="right">
+                      {row.honestyRate == null
+                        ? '—'
+                        : `${(row.honestyRate * 100).toLocaleString(undefined, {
+                            maximumFractionDigits: 1,
+                          })}%`}
+                    </TableCell>
+                    <TableCell align="right">
+                      {row.netRecovered.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell align="right">
+                      {row.collectionScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {report && (report.staffLeaderboard ?? []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={showOrgCol ? 10 : 9}>
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                        No staff in scope.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </SectionCard>
+      </Box>
+    </>
+  )
+}
+
 export function OrganizationsPage() {
   const {
     token,
     me,
+    signOut,
     orgs,
     orgsErr,
     reloadOrganizations,
@@ -303,6 +801,32 @@ export function OrganizationsPage() {
   const [createSaving, setCreateSaving] = useState(false)
   const [createErr, setCreateErr] = useState<string | null>(null)
   const isSuperAdmin = me?.role === 'SUPER_ADMIN'
+  const canEditInvoiceProfile = me?.role === 'SUPER_ADMIN' || me?.role === 'ORG_ADMIN'
+  const [editingOrgProfile, setEditingOrgProfile] = useState<OrganizationRow | null>(null)
+  const [orgProfileLegalName, setOrgProfileLegalName] = useState('')
+  const [orgProfileTaxNumber, setOrgProfileTaxNumber] = useState('')
+  const [orgProfileBankDetails, setOrgProfileBankDetails] = useState('')
+  const [orgProfilePaymentInstructions, setOrgProfilePaymentInstructions] = useState('')
+  const [orgProfileLogoUrl, setOrgProfileLogoUrl] = useState('')
+  const [orgProfileFocusField, setOrgProfileFocusField] = useState<
+    'legalName' | 'taxNumber' | 'bankDetails' | 'paymentInstructions' | 'logoUrl' | null
+  >(null)
+  const [orgProfileSaving, setOrgProfileSaving] = useState(false)
+  const [orgProfileErr, setOrgProfileErr] = useState<string | null>(null)
+
+  const invoiceProfileCompleteness = (o: OrganizationRow) => {
+    const p = o.settings?.invoiceProfile
+    if (!p) return { done: 0, total: 5 }
+    const fields = [
+      p.legalName,
+      p.taxNumber,
+      p.bankDetails,
+      p.paymentInstructions,
+      p.logoUrl,
+    ]
+    const done = fields.filter((v) => typeof v === 'string' && v.trim().length > 0).length
+    return { done, total: fields.length }
+  }
 
   const submitCreateOrg = (e: FormEvent) => {
     e.preventDefault()
@@ -342,6 +866,60 @@ export function OrganizationsPage() {
       })
       .catch((err: Error) => setCreateErr(err.message))
       .finally(() => setCreateSaving(false))
+  }
+
+  const openEditOrgProfile = (o: OrganizationRow) => {
+    setEditingOrgProfile(o)
+    const p = o.settings?.invoiceProfile
+    setOrgProfileLegalName(p?.legalName ?? '')
+    setOrgProfileTaxNumber(p?.taxNumber ?? '')
+    setOrgProfileBankDetails(p?.bankDetails ?? '')
+    setOrgProfilePaymentInstructions(p?.paymentInstructions ?? '')
+    setOrgProfileLogoUrl(p?.logoUrl ?? '')
+    const missing: Array<
+      'legalName' | 'taxNumber' | 'bankDetails' | 'paymentInstructions' | 'logoUrl'
+    > = []
+    if (!(p?.legalName && p.legalName.trim())) missing.push('legalName')
+    if (!(p?.taxNumber && p.taxNumber.trim())) missing.push('taxNumber')
+    if (!(p?.bankDetails && p.bankDetails.trim())) missing.push('bankDetails')
+    if (!(p?.paymentInstructions && p.paymentInstructions.trim()))
+      missing.push('paymentInstructions')
+    if (!(p?.logoUrl && p.logoUrl.trim())) missing.push('logoUrl')
+    setOrgProfileFocusField(missing[0] ?? 'legalName')
+    setOrgProfileErr(null)
+  }
+
+  const submitOrgProfile = () => {
+    if (!token || !editingOrgProfile || !canEditInvoiceProfile) return
+    setOrgProfileSaving(true)
+    setOrgProfileErr(null)
+    fetch(`/api/v1/organizations/${editingOrgProfile.id}/invoice-profile`, {
+      method: 'PATCH',
+      headers: {
+        ...authHeaders(token),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        invoiceLegalName: orgProfileLegalName,
+        invoiceTaxNumber: orgProfileTaxNumber,
+        invoiceBankDetails: orgProfileBankDetails,
+        invoicePaymentInstructions: orgProfilePaymentInstructions,
+        invoiceLogoUrl: orgProfileLogoUrl,
+      }),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+      })
+      .then(() => {
+        setEditingOrgProfile(null)
+        reloadOrganizations()
+      })
+      .catch((err: Error) => setOrgProfileErr(err.message))
+      .finally(() => setOrgProfileSaving(false))
   }
 
   return (
@@ -438,7 +1016,9 @@ export function OrganizationsPage() {
                   <TableCell>Name</TableCell>
                   <TableCell>Slug</TableCell>
                   <TableCell>Currency</TableCell>
+                  <TableCell>Invoice profile</TableCell>
                   <TableCell align="right">Users</TableCell>
+                  {canEditInvoiceProfile && <TableCell align="right">Actions</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -451,7 +1031,36 @@ export function OrganizationsPage() {
                       {o.slug}
                     </TableCell>
                     <TableCell>{o.baseCurrency}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const c = invoiceProfileCompleteness(o)
+                        const full = c.done === c.total
+                        return (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color={full ? 'success' : c.done > 0 ? 'warning' : 'default'}
+                            label={`${c.done}/${c.total}`}
+                            onClick={canEditInvoiceProfile ? () => openEditOrgProfile(o) : undefined}
+                            sx={{
+                              cursor: canEditInvoiceProfile ? 'pointer' : 'default',
+                            }}
+                          />
+                        )
+                      })()}
+                    </TableCell>
                     <TableCell align="right">{o._count.users}</TableCell>
+                    {canEditInvoiceProfile ? (
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => openEditOrgProfile(o)}
+                        >
+                          Invoice profile
+                        </Button>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -459,6 +1068,83 @@ export function OrganizationsPage() {
           </TableContainer>
         )}
       </SectionCard>
+
+      <Dialog
+        open={editingOrgProfile !== null}
+        onClose={() => !orgProfileSaving && setEditingOrgProfile(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Organization invoice profile</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {orgProfileErr ? (
+              <Alert severity="error" variant="outlined">
+                {orgProfileErr}
+              </Alert>
+            ) : null}
+            <TextField
+              size="small"
+              label="Legal entity name"
+              value={orgProfileLegalName}
+              onChange={(e) => setOrgProfileLegalName(e.target.value)}
+              autoFocus={orgProfileFocusField === 'legalName'}
+              fullWidth
+            />
+            <TextField
+              size="small"
+              label="Tax / VAT number"
+              value={orgProfileTaxNumber}
+              onChange={(e) => setOrgProfileTaxNumber(e.target.value)}
+              autoFocus={orgProfileFocusField === 'taxNumber'}
+              fullWidth
+            />
+            <TextField
+              size="small"
+              label="Bank details"
+              value={orgProfileBankDetails}
+              onChange={(e) => setOrgProfileBankDetails(e.target.value)}
+              autoFocus={orgProfileFocusField === 'bankDetails'}
+              fullWidth
+              multiline
+              minRows={2}
+            />
+            <TextField
+              size="small"
+              label="Payment instructions"
+              value={orgProfilePaymentInstructions}
+              onChange={(e) => setOrgProfilePaymentInstructions(e.target.value)}
+              autoFocus={orgProfileFocusField === 'paymentInstructions'}
+              fullWidth
+              multiline
+              minRows={2}
+            />
+            <TextField
+              size="small"
+              label="Logo URL"
+              value={orgProfileLogoUrl}
+              onChange={(e) => setOrgProfileLogoUrl(e.target.value)}
+              autoFocus={orgProfileFocusField === 'logoUrl'}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setEditingOrgProfile(null)}
+            disabled={orgProfileSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={submitOrgProfile}
+            disabled={orgProfileSaving}
+          >
+            {orgProfileSaving ? 'Saving…' : 'Save profile'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   )
 }
@@ -828,6 +1514,21 @@ export function PortfoliosPage() {
 
 function tenantDisplayName(row: TenantRow) {
   return row.tradingName ?? row.legalName
+}
+
+function invoiceActivityChipColor(kind: string): ChipProps['color'] {
+  switch (kind) {
+    case 'PAYMENT_ALLOCATED':
+      return 'success'
+    case 'PAYMENT_REVERSED':
+      return 'warning'
+    case 'INVOICE_ISSUED':
+      return 'info'
+    case 'ADJUSTMENT':
+      return 'secondary'
+    default:
+      return 'default'
+  }
 }
 
 function TenantViewDialogBody({ tenant }: { tenant: TenantRow }) {
@@ -1432,6 +2133,7 @@ export function TenantsPage() {
 export function LeasesPage() {
   const {
     token,
+    me,
     signOut,
     reloadDashboardMetrics,
     canWriteProperty,
@@ -1442,6 +2144,12 @@ export function LeasesPage() {
   } = useDashboard()
 
   const [createTenantId, setCreateTenantId] = useState('')
+  const [createTenantOrgId, setCreateTenantOrgId] = useState<string | null>(null)
+  const [createBrokerUserId, setCreateBrokerUserId] = useState('')
+  const [orgStaffList, setOrgStaffList] = useState<OrgStaffUserRow[]>([])
+  const [orgStaffErr, setOrgStaffErr] = useState<string | null>(null)
+  const [orgStaffLoading, setOrgStaffLoading] = useState(false)
+  const [editBrokerUserId, setEditBrokerUserId] = useState('')
   const [createStart, setCreateStart] = useState('')
   const [createEnd, setCreateEnd] = useState('')
   const [createStatus, setCreateStatus] = useState<string>('DRAFT')
@@ -1552,6 +2260,87 @@ export function LeasesPage() {
     handleUnauthorized,
   ])
 
+  useEffect(() => {
+    if (!createTenantId) {
+      setCreateTenantOrgId(null)
+      return
+    }
+    if (!token) return
+    let cancelled = false
+    fetch(`/api/v1/tenants/${encodeURIComponent(createTenantId)}`, {
+      headers: authHeaders(token),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          handleUnauthorized()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) return null
+        return r.json() as Promise<TenantRow>
+      })
+      .then((row) => {
+        if (cancelled || !row?.organizationId) return
+        setCreateTenantOrgId(row.organizationId ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setCreateTenantOrgId(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [createTenantId, token, handleUnauthorized])
+
+  useEffect(() => {
+    if (!token || !canWriteProperty) {
+      setOrgStaffList([])
+      setOrgStaffErr(null)
+      return
+    }
+    let cancelled = false
+    const superAdmin = me?.role === 'SUPER_ADMIN'
+    const oid = editingLease?.organizationId ?? createTenantOrgId
+    const orgParam =
+      superAdmin && oid ? `?organizationId=${encodeURIComponent(oid)}` : ''
+    setOrgStaffLoading(true)
+    setOrgStaffErr(null)
+    fetch(`/api/v1/dashboard/org-staff${orgParam}`, {
+      headers: authHeaders(token),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          handleUnauthorized()
+          throw new Error('Session expired')
+        }
+        if (r.status === 403) {
+          throw new Error('You cannot load org staff for broker assignment.')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<DashboardOrgStaffResponse>
+      })
+      .then((body) => {
+        if (!cancelled) setOrgStaffList(body.users)
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setOrgStaffErr(e.message)
+          setOrgStaffList([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setOrgStaffLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    token,
+    canWriteProperty,
+    me?.role,
+    editingLease?.organizationId,
+    createTenantOrgId,
+    handleUnauthorized,
+  ])
+
   const createCascade = usePropertyUnitCascade(token, handleUnauthorized)
   const editReplaceCascade = usePropertyUnitCascade(token, handleUnauthorized)
 
@@ -1596,6 +2385,7 @@ export function LeasesPage() {
         endDate: createEnd,
         status: createStatus,
         units: unitsPayload,
+        ...(createBrokerUserId ? { brokerUserId: createBrokerUserId } : {}),
         ...(createNotes.trim()
           ? { terms: { notes: createNotes.trim() } }
           : {}),
@@ -1614,6 +2404,7 @@ export function LeasesPage() {
         setLeaseListNonce((n) => n + 1)
         setCreateErr(null)
         setCreateNotes('')
+        setCreateBrokerUserId('')
         createCascade.clearUnitSelection()
       })
       .catch((err: Error) => setCreateErr(err.message))
@@ -1626,6 +2417,7 @@ export function LeasesPage() {
     setEditEnd(leaseDateToInputValue(l.endDate))
     setEditStatus(l.status)
     setEditNotes(leaseNotesFromTerms(l.terms))
+    setEditBrokerUserId(l.brokerUserId ?? '')
     setEditUnitPcts(initialEditUnitPcts(l))
     setEditReplaceUnitsEnabled(false)
     editReplaceCascade.resetAll()
@@ -1699,6 +2491,7 @@ export function LeasesPage() {
         endDate: editEnd,
         status: editStatus,
         units: unitsPayload,
+        brokerUserId: editBrokerUserId || null,
         terms: mergeLeaseTermsForPatch(editingLease.terms, editNotes),
       }),
     })
@@ -1713,6 +2506,7 @@ export function LeasesPage() {
         setEditingLease(null)
         setEditUnitPcts({})
         setEditNotes('')
+        setEditBrokerUserId('')
         setEditReplaceUnitsEnabled(false)
         editReplaceCascade.resetAll()
         reloadDashboardMetrics()
@@ -1745,6 +2539,20 @@ export function LeasesPage() {
       .catch((e: Error) => setDeleteErr(e.message))
       .finally(() => setDeleteSaving(false))
   }
+
+  const editBrokerOptions = useMemo(() => {
+    const list = [...orgStaffList]
+    const bu = editingLease?.brokerUser
+    if (bu && !list.some((u) => u.id === bu.id)) {
+      list.unshift({
+        id: bu.id,
+        email: bu.email,
+        displayName: bu.displayName,
+        role: '',
+      })
+    }
+    return list
+  }, [orgStaffList, editingLease?.brokerUser])
 
   return (
     <>
@@ -1803,6 +2611,28 @@ export function LeasesPage() {
                   allowClear
                   sx={{ maxWidth: 720, width: '100%' }}
                   onUnauthorized={handleUnauthorized}
+                />
+                {orgStaffErr ? (
+                  <Alert severity="warning" variant="outlined">
+                    {orgStaffErr}
+                  </Alert>
+                ) : null}
+                <Autocomplete
+                  size="small"
+                  sx={{ maxWidth: 720, width: '100%' }}
+                  options={orgStaffList}
+                  loading={orgStaffLoading}
+                  getOptionLabel={orgStaffOptionLabel}
+                  isOptionEqualToValue={(a, b) => a.id === b.id}
+                  value={orgStaffList.find((u) => u.id === createBrokerUserId) ?? null}
+                  onChange={(_, v) => setCreateBrokerUserId(v?.id ?? '')}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Collection broker (optional)"
+                      placeholder="None"
+                    />
+                  )}
                 />
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <TextField
@@ -1955,6 +2785,7 @@ export function LeasesPage() {
                     <TableCell>Start</TableCell>
                     <TableCell>End</TableCell>
                     <TableCell>Units</TableCell>
+                    <TableCell>Broker</TableCell>
                     <TableCell align="right" width={canWriteProperty ? 148 : 56}>
                       Actions
                     </TableCell>
@@ -1990,6 +2821,13 @@ export function LeasesPage() {
                         }}
                       >
                         {l.leaseUnits.map(formatLeaseUnitCell).join(', ') || '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>
+                          {l.brokerUser
+                            ? l.brokerUser.displayName?.trim() || l.brokerUser.email
+                            : '—'}
+                        </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <IconButton
@@ -2069,6 +2907,7 @@ export function LeasesPage() {
             setEditingLease(null)
             setEditUnitPcts({})
             setEditNotes('')
+            setEditBrokerUserId('')
             setEditReplaceUnitsEnabled(false)
             editReplaceCascade.resetAll()
           }
@@ -2130,6 +2969,29 @@ export function LeasesPage() {
                 ))}
               </Select>
             </FormControl>
+            {orgStaffErr ? (
+              <Alert severity="warning" variant="outlined">
+                {orgStaffErr}
+              </Alert>
+            ) : null}
+            <Autocomplete
+              size="small"
+              sx={{ maxWidth: 480 }}
+              options={editBrokerOptions}
+              loading={orgStaffLoading}
+              getOptionLabel={orgStaffOptionLabel}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              value={editBrokerOptions.find((u) => u.id === editBrokerUserId) ?? null}
+              onChange={(_, v) => setEditBrokerUserId(v?.id ?? '')}
+              disabled={editSaving}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Collection broker (optional)"
+                  placeholder="None"
+                />
+              )}
+            />
             <TextField
               label="Notes (optional)"
               size="small"
@@ -2233,6 +3095,7 @@ export function LeasesPage() {
               setEditingLease(null)
               setEditUnitPcts({})
               setEditNotes('')
+              setEditBrokerUserId('')
               setEditReplaceUnitsEnabled(false)
               editReplaceCascade.resetAll()
             }}
@@ -3697,6 +4560,27 @@ export function BillingInvoiceDetailPage() {
   const [draftScheduleOptions, setDraftScheduleOptions] = useState<ChargeScheduleRow[] | null>(null)
   const [draftScheduleErr, setDraftScheduleErr] = useState<string | null>(null)
   const [draftSchedulesLoading, setDraftSchedulesLoading] = useState(false)
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailMessage, setEmailMessage] = useState('')
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailErr, setEmailErr] = useState<string | null>(null)
+  const [paymentRows, setPaymentRows] = useState<InvoicePaymentRow[] | null>(null)
+  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [paymentErr, setPaymentErr] = useState<string | null>(null)
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentNarrative, setPaymentNarrative] = useState('')
+  const [paymentSaving, setPaymentSaving] = useState(false)
+  const [paymentSaveErr, setPaymentSaveErr] = useState<string | null>(null)
+  const [reversingPaymentId, setReversingPaymentId] = useState<string | null>(null)
+  const [reverseDialogOpen, setReverseDialogOpen] = useState(false)
+  const [reverseTarget, setReverseTarget] = useState<InvoicePaymentRow | null>(null)
+  const [reverseReason, setReverseReason] = useState('')
+  const [activityRows, setActivityRows] = useState<InvoiceActivityRow[] | null>(null)
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [activityErr, setActivityErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (!draftEditMode || !token || !inv || inv.status !== 'DRAFT') {
@@ -3767,6 +4651,115 @@ export function BillingInvoiceDetailPage() {
   useEffect(() => {
     void reloadDetail()
   }, [reloadDetail])
+
+  const reloadPayments = useCallback(() => {
+    if (!token || !invoiceId || !inv || inv.status !== 'ISSUED') {
+      setPaymentRows(null)
+      setPaymentErr(null)
+      setPaymentLoading(false)
+      return Promise.resolve()
+    }
+    setPaymentLoading(true)
+    setPaymentErr(null)
+    return fetch(
+      `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments`,
+      { headers: authHeaders(token) },
+    )
+      .then(async (r) => {
+        if (r.status === 401) {
+          handleUnauthorized()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<InvoicePaymentRow[]>
+      })
+      .then((data) => setPaymentRows(data))
+      .catch((e: Error) => {
+        setPaymentRows([])
+        setPaymentErr(e.message)
+      })
+      .finally(() => setPaymentLoading(false))
+  }, [token, invoiceId, inv, handleUnauthorized])
+
+  useEffect(() => {
+    void reloadPayments()
+  }, [reloadPayments])
+
+  const reloadActivity = useCallback(() => {
+    if (!token || !invoiceId) {
+      setActivityRows(null)
+      setActivityErr(null)
+      setActivityLoading(false)
+      return Promise.resolve()
+    }
+    setActivityLoading(true)
+    setActivityErr(null)
+    return fetch(
+      `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/activity`,
+      { headers: authHeaders(token) },
+    )
+      .then(async (r) => {
+        if (r.status === 401) {
+          handleUnauthorized()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<InvoiceActivityRow[]>
+      })
+      .then((data) => setActivityRows(data))
+      .catch((e: Error) => {
+        setActivityRows([])
+        setActivityErr(e.message)
+      })
+      .finally(() => setActivityLoading(false))
+  }, [token, invoiceId, handleUnauthorized])
+
+  useEffect(() => {
+    void reloadActivity()
+  }, [reloadActivity])
+
+  const submitReversePayment = useCallback(() => {
+    if (!token || !invoiceId || !reverseTarget) return
+    setReversingPaymentId(reverseTarget.id)
+    setPaymentErr(null)
+    fetch(
+      `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments/${encodeURIComponent(reverseTarget.id)}/reverse`,
+      {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...(reverseReason.trim() ? { reason: reverseReason.trim() } : {}),
+        }),
+      },
+    )
+      .then(async (r) => {
+        if (r.status === 401) {
+          handleUnauthorized()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+      })
+      .then(async () => {
+        setReverseDialogOpen(false)
+        setReverseTarget(null)
+        setReverseReason('')
+        await reloadPayments()
+        await reloadActivity()
+      })
+      .catch((e: Error) => setPaymentErr(e.message))
+      .finally(() => setReversingPaymentId(null))
+  }, [
+    token,
+    invoiceId,
+    reverseTarget,
+    reverseReason,
+    handleUnauthorized,
+    reloadPayments,
+    reloadActivity,
+  ])
 
   const openDraftEdit = useCallback(() => {
     if (!inv || inv.status !== 'DRAFT') return
@@ -3860,6 +4853,11 @@ export function BillingInvoiceDetailPage() {
   const lineTotal = inv
     ? inv.lines.reduce((sum, l) => sum + Number(l.amount), 0)
     : 0
+  const paidTotal = (paymentRows ?? []).reduce(
+    (sum, p) => sum + Math.abs(Number(p.signedAmount)),
+    0,
+  )
+  const balanceOutstanding = Math.max(0, lineTotal - paidTotal)
 
   const downloadInvoicePdf = useCallback(() => {
     if (!token || !invoiceId) return
@@ -3886,6 +4884,51 @@ export function BillingInvoiceDetailPage() {
       })
       .catch((e: Error) => setBillingActionErr(e.message))
   }, [token, invoiceId, handleUnauthorized, setBillingActionErr])
+
+  const sendInvoiceEmail = useCallback(() => {
+    if (!token || !invoiceId) return
+    setEmailSending(true)
+    setEmailErr(null)
+    setBillingActionErr(null)
+    fetch(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/send-email`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(token),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...(emailTo.trim() ? { to: emailTo.trim() } : {}),
+        ...(emailSubject.trim() ? { subject: emailSubject.trim() } : {}),
+        ...(emailMessage.trim() ? { message: emailMessage.trim() } : {}),
+      }),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          handleUnauthorized()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+      })
+      .then(() => {
+        setEmailDialogOpen(false)
+        setEmailTo('')
+        setEmailSubject('')
+        setEmailMessage('')
+      })
+      .catch((e: Error) => {
+        setEmailErr(e.message)
+        setBillingActionErr(e.message)
+      })
+      .finally(() => setEmailSending(false))
+  }, [
+    token,
+    invoiceId,
+    emailTo,
+    emailSubject,
+    emailMessage,
+    handleUnauthorized,
+    setBillingActionErr,
+  ])
 
   return (
     <>
@@ -3919,15 +4962,34 @@ export function BillingInvoiceDetailPage() {
             ) : null}
           </Box>
           {inv && !detailLoading ? (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<PictureAsPdfOutlined />}
-              onClick={downloadInvoicePdf}
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
               sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
             >
-              Download PDF
-            </Button>
+              {canWriteBilling && inv.status !== 'VOID' ? (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<SendOutlined />}
+                  onClick={() => {
+                    setEmailDialogOpen(true)
+                    setEmailErr(null)
+                  }}
+                >
+                  Send email
+                </Button>
+              ) : null}
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<PictureAsPdfOutlined />}
+                onClick={downloadInvoicePdf}
+              >
+                Download PDF
+              </Button>
+            </Stack>
           ) : null}
         </Stack>
       </Box>
@@ -3958,6 +5020,63 @@ export function BillingInvoiceDetailPage() {
 
       {!detailLoading && inv && (
         <>
+          <Dialog
+            open={emailDialogOpen}
+            onClose={() => !emailSending && setEmailDialogOpen(false)}
+            fullWidth
+            maxWidth="sm"
+          >
+            <DialogTitle>Send invoice email</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ mt: 0.5 }}>
+                {emailErr ? (
+                  <Alert severity="error" variant="outlined">
+                    {emailErr}
+                  </Alert>
+                ) : null}
+                <TextField
+                  label="To (optional)"
+                  size="small"
+                  type="email"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  helperText="Leave blank to use tenant contact email."
+                />
+                <TextField
+                  label="Subject (optional)"
+                  size="small"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  helperText="Leave blank for the default invoice subject."
+                />
+                <TextField
+                  label="Message (optional)"
+                  size="small"
+                  multiline
+                  minRows={4}
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  helperText="Leave blank for the default message."
+                />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => setEmailDialogOpen(false)}
+                disabled={emailSending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={sendInvoiceEmail}
+                disabled={emailSending}
+              >
+                {emailSending ? 'Sending…' : 'Send'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
           <SectionCard
             title="Summary"
             subtitle="Draft invoices can be issued (posts to sub-ledger) or voided. Issued invoices are immutable."
@@ -4005,6 +5124,19 @@ export function BillingInvoiceDetailPage() {
                     Void
                   </Button>
                 </Stack>
+              ) : canWriteBilling && inv.status === 'ISSUED' ? (
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => {
+                    setPaymentDialogOpen(true)
+                    setPaymentSaveErr(null)
+                    setPaymentAmount(balanceOutstanding.toFixed(2))
+                    setPaymentNarrative('')
+                  }}
+                >
+                  Record payment
+                </Button>
               ) : undefined
             }
           >
@@ -4060,8 +5192,353 @@ export function BillingInvoiceDetailPage() {
                 Total {inv.currency}{' '}
                 {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </Typography>
+              {inv.status === 'ISSUED' ? (
+                <Stack direction="row" flexWrap="wrap" useFlexGap spacing={2}>
+                  <Typography variant="body2">
+                    <strong>Paid:</strong> {inv.currency}{' '}
+                    {paidTotal.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Outstanding:</strong> {inv.currency}{' '}
+                    {balanceOutstanding.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </Typography>
+                </Stack>
+              ) : null}
             </Stack>
           </SectionCard>
+
+          {inv.status === 'ISSUED' ? (
+            <Box sx={{ mt: 2 }}>
+              <SectionCard
+                title="Payments"
+                subtitle="Payment allocations posted against this invoice. Each creates an immutable PAYMENT ledger line."
+                icon={<SavingsOutlined />}
+              >
+                {paymentErr ? (
+                  <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+                    {paymentErr}
+                  </Alert>
+                ) : null}
+                {paymentLoading && paymentRows === null ? (
+                  <Stack spacing={1}>
+                    <Skeleton height={32} />
+                    <Skeleton height={32} />
+                  </Stack>
+                ) : null}
+                {!paymentLoading &&
+                paymentRows &&
+                paymentRows.length === 0 &&
+                !paymentErr ? (
+                  <Typography color="text.secondary">
+                    No payments recorded for this invoice yet.
+                  </Typography>
+                ) : null}
+                {paymentRows && paymentRows.length > 0 ? (
+                  <Stack spacing={1}>
+                    {paymentRows.map((p) => (
+                      <Stack
+                        key={p.id}
+                        direction={{ xs: 'column', sm: 'row' }}
+                        justifyContent="space-between"
+                        sx={{
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                          p: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2">{p.narrative}</Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(p.createdAt).toLocaleString()}
+                            </Typography>
+                            {p.reversed ? (
+                              <Chip
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                label="Reversed"
+                              />
+                            ) : null}
+                          </Stack>
+                          {p.reversal ? (
+                            <Typography variant="caption" color="text.secondary">
+                              Reversal posted {new Date(p.reversal.createdAt).toLocaleString()}
+                              {' · '}
+                              {p.currency}{' '}
+                              {Math.abs(Number(p.reversal.signedAmount)).toLocaleString(
+                                undefined,
+                                { minimumFractionDigits: 2 },
+                              )}
+                              {p.reversal.reason ? ` · ${p.reversal.reason}` : ''}
+                            </Typography>
+                          ) : null}
+                        </Box>
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={1}
+                          alignItems={{ xs: 'flex-start', sm: 'center' }}
+                        >
+                          <Typography
+                            variant="body2"
+                            fontWeight={700}
+                            sx={{ fontFamily: 'JetBrains Mono, monospace' }}
+                          >
+                            {p.currency}{' '}
+                            {Math.abs(Number(p.signedAmount)).toLocaleString(
+                              undefined,
+                              { minimumFractionDigits: 2 },
+                            )}
+                          </Typography>
+                          {canWriteBilling ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              disabled={Boolean(p.reversed) || reversingPaymentId === p.id}
+                              onClick={() => {
+                                setReverseTarget(p)
+                                setReverseReason('')
+                                setReverseDialogOpen(true)
+                              }}
+                            >
+                              {reversingPaymentId === p.id ? 'Reversing…' : 'Reverse'}
+                            </Button>
+                          ) : null}
+                        </Stack>
+                      </Stack>
+                    ))}
+                  </Stack>
+                ) : null}
+              </SectionCard>
+            </Box>
+          ) : null}
+
+          <Box sx={{ mt: 2 }}>
+            <SectionCard
+              title="Activity timeline"
+              subtitle="Invoice and ledger audit events in reverse chronological order."
+              icon={<ReceiptLongOutlined />}
+            >
+              {activityErr ? (
+                <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+                  {activityErr}
+                </Alert>
+              ) : null}
+              {activityLoading && activityRows === null ? (
+                <Stack spacing={1}>
+                  <Skeleton height={28} />
+                  <Skeleton height={28} />
+                </Stack>
+              ) : null}
+              {!activityLoading &&
+              activityRows &&
+              activityRows.length === 0 &&
+              !activityErr ? (
+                <Typography color="text.secondary">No activity yet.</Typography>
+              ) : null}
+              {activityRows && activityRows.length > 0 ? (
+                <Stack spacing={1}>
+                  {activityRows.map((a) => (
+                    <Stack
+                      key={a.id}
+                      direction={{ xs: 'column', sm: 'row' }}
+                      justifyContent="space-between"
+                      sx={{
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1,
+                      }}
+                    >
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap>
+                          <Chip
+                            size="small"
+                            label={a.kind.replace(/_/g, ' ')}
+                            color={invoiceActivityChipColor(a.kind)}
+                            variant="outlined"
+                          />
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(a.at).toLocaleString()} · {a.detail}
+                        </Typography>
+                      </Box>
+                      {a.amount && a.currency ? (
+                        <Typography
+                          variant="body2"
+                          fontWeight={700}
+                          sx={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            color:
+                              a.kind === 'PAYMENT_ALLOCATED'
+                                ? 'success.main'
+                                : a.kind === 'PAYMENT_REVERSED'
+                                  ? 'warning.main'
+                                  : 'text.primary',
+                          }}
+                        >
+                          {a.currency}{' '}
+                          {Math.abs(Number(a.amount)).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                          })}
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  ))}
+                </Stack>
+              ) : null}
+            </SectionCard>
+          </Box>
+
+          <Dialog
+            open={paymentDialogOpen}
+            onClose={() => !paymentSaving && setPaymentDialogOpen(false)}
+            fullWidth
+            maxWidth="sm"
+          >
+            <DialogTitle>Record payment</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ mt: 0.5 }}>
+                {paymentSaveErr ? (
+                  <Alert severity="error" variant="outlined">
+                    {paymentSaveErr}
+                  </Alert>
+                ) : null}
+                <TextField
+                  label="Amount"
+                  size="small"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  helperText="Positive value. Will post as a PAYMENT credit."
+                />
+                <TextField
+                  label="Narrative (optional)"
+                  size="small"
+                  value={paymentNarrative}
+                  onChange={(e) => setPaymentNarrative(e.target.value)}
+                  helperText="Optional note appended after the invoice allocation tag."
+                />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => setPaymentDialogOpen(false)}
+                disabled={paymentSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                disabled={paymentSaving}
+                onClick={() => {
+                  if (!token || !invoiceId) return
+                  const amt = parseFloat(paymentAmount.replace(',', '.'))
+                  if (!Number.isFinite(amt) || amt <= 0) {
+                    setPaymentSaveErr('Amount must be greater than zero.')
+                    return
+                  }
+                  if (amt > balanceOutstanding) {
+                    const proceed = window.confirm(
+                      `This payment (${inv.currency} ${amt.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}) is greater than outstanding (${inv.currency} ${balanceOutstanding.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}). Post overpayment anyway?`,
+                    )
+                    if (!proceed) return
+                  }
+                  setPaymentSaving(true)
+                  setPaymentSaveErr(null)
+                  fetch(
+                    `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        ...authHeaders(token),
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        amount: amt,
+                        narrative: paymentNarrative.trim() || undefined,
+                      }),
+                    },
+                  )
+                    .then(async (r) => {
+                      if (r.status === 401) {
+                        handleUnauthorized()
+                        throw new Error('Session expired')
+                      }
+                      if (!r.ok) throw new Error(await readApiErrorMessage(r))
+                    })
+                    .then(async () => {
+                      setPaymentDialogOpen(false)
+                      await reloadPayments()
+                      await reloadActivity()
+                    })
+                    .catch((e: Error) => setPaymentSaveErr(e.message))
+                    .finally(() => setPaymentSaving(false))
+                }}
+              >
+                {paymentSaving ? 'Posting…' : 'Post payment'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          <Dialog
+            open={reverseDialogOpen}
+            onClose={() => !reversingPaymentId && setReverseDialogOpen(false)}
+            fullWidth
+            maxWidth="sm"
+          >
+            <DialogTitle>Reverse payment allocation</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ mt: 0.5 }}>
+                <Typography variant="body2" color="text.secondary">
+                  This posts an immutable ADJUSTMENT entry to reverse the selected
+                  payment.
+                </Typography>
+                {reverseTarget ? (
+                  <Typography variant="body2">
+                    Reversing {reverseTarget.currency}{' '}
+                    {Math.abs(Number(reverseTarget.signedAmount)).toLocaleString(
+                      undefined,
+                      { minimumFractionDigits: 2 },
+                    )}{' '}
+                    from {new Date(reverseTarget.createdAt).toLocaleString()}.
+                  </Typography>
+                ) : null}
+                <TextField
+                  label="Reason (optional)"
+                  size="small"
+                  value={reverseReason}
+                  onChange={(e) => setReverseReason(e.target.value)}
+                  helperText="This reason will be stored on the reversal narrative."
+                />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => setReverseDialogOpen(false)}
+                disabled={Boolean(reversingPaymentId)}
+              >
+                Cancel
+              </Button>
+              <Button
+                color="warning"
+                variant="contained"
+                disabled={!reverseTarget || Boolean(reversingPaymentId)}
+                onClick={submitReversePayment}
+              >
+                {reversingPaymentId ? 'Reversing…' : 'Confirm reverse'}
+              </Button>
+            </DialogActions>
+          </Dialog>
 
           {canWriteBilling && inv.status === 'DRAFT' && draftEditMode ? (
             <Box sx={{ mt: 2 }}>

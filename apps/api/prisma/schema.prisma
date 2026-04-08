@@ -39,6 +39,7 @@ model User {
   role           UserRole     @default(READ_ONLY)
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
+  brokeredLeases Lease[]      @relation("LeaseBroker")
 
   @@unique([organizationId, email])
   @@map("users")
@@ -167,6 +168,8 @@ model Lease {
   endDate        DateTime     @map("end_date") @db.Date
   status         LeaseStatus  @default(DRAFT)
   terms          Json         @default("{}")
+  brokerUserId   String?      @map("broker_user_id") @db.Uuid
+  brokerUser     User?        @relation("LeaseBroker", fields: [brokerUserId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
   leaseUnits      LeaseUnit[]

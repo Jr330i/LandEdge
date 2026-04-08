@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import type { JwtAccessPayload } from '../auth/jwt.types';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateOrganizationInvoiceProfileDto } from './dto/update-organization-invoice-profile.dto';
 import { OrganizationsService } from './organizations.service';
 
 @ApiTags('organizations')
@@ -59,5 +61,19 @@ export class OrganizationsController {
     @CurrentUser() user: JwtAccessPayload,
   ) {
     return this.organizationsService.findOneForUser(id, user);
+  }
+
+  @Patch(':id/invoice-profile')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @ApiOperation({
+    summary: 'Update organization invoice profile (SUPER_ADMIN or own ORG_ADMIN)',
+  })
+  updateInvoiceProfile(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateOrganizationInvoiceProfileDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.organizationsService.updateInvoiceProfile(id, dto, user);
   }
 }

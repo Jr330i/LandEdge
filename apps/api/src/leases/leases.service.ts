@@ -83,6 +83,9 @@ export class LeasesService {
           orderBy: { startDate: 'desc' },
           include: {
             tenant: { select: { id: true, legalName: true, tradingName: true } },
+            brokerUser: {
+              select: { id: true, email: true, displayName: true },
+            },
             leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
           },
         });
@@ -93,6 +96,9 @@ export class LeasesService {
           orderBy: { startDate: 'desc' },
           include: {
             tenant: { select: { id: true, legalName: true, tradingName: true } },
+            brokerUser: {
+              select: { id: true, email: true, displayName: true },
+            },
             leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
           },
           skip: (pageResolved - 1) * pageSizeResolved,
@@ -115,6 +121,9 @@ export class LeasesService {
         where: { id },
         include: {
           tenant: true,
+          brokerUser: {
+            select: { id: true, email: true, displayName: true },
+          },
           leaseUnits: { include: { unit: true } },
         },
       });
@@ -172,6 +181,10 @@ export class LeasesService {
         undefined,
       );
 
+      if (dto.brokerUserId != null) {
+        await this.assertBrokerInOrganization(tx, dto.brokerUserId, orgId);
+      }
+
       const lease = await tx.lease.create({
         data: {
           organizationId: orgId,
@@ -180,6 +193,9 @@ export class LeasesService {
           endDate: end,
           status,
           terms: (dto.terms ?? {}) as Prisma.InputJsonValue,
+          ...(dto.brokerUserId !== undefined && {
+            brokerUserId: dto.brokerUserId,
+          }),
           leaseUnits: {
             create: dto.units.map((u) => ({
               unitId: u.unitId,
@@ -189,6 +205,9 @@ export class LeasesService {
         },
         include: {
           tenant: { select: { id: true, legalName: true, tradingName: true } },
+          brokerUser: {
+            select: { id: true, email: true, displayName: true },
+          },
           leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
         },
       });
@@ -252,6 +271,12 @@ export class LeasesService {
         id,
       );
 
+      if (dto.brokerUserId !== undefined) {
+        if (dto.brokerUserId != null) {
+          await this.assertBrokerInOrganization(tx, dto.brokerUserId, orgId);
+        }
+      }
+
       if (dto.units !== undefined) {
         await tx.leaseUnit.deleteMany({ where: { leaseId: id } });
         await tx.leaseUnit.createMany({
@@ -272,9 +297,15 @@ export class LeasesService {
           ...(dto.terms !== undefined && {
             terms: dto.terms as Prisma.InputJsonValue,
           }),
+          ...(dto.brokerUserId !== undefined && {
+            brokerUserId: dto.brokerUserId,
+          }),
         },
         include: {
           tenant: { select: { id: true, legalName: true, tradingName: true } },
+          brokerUser: {
+            select: { id: true, email: true, displayName: true },
+          },
           leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
         },
       });
@@ -306,6 +337,17 @@ export class LeasesService {
       await tx.lease.delete({ where: { id } });
       return { id, deleted: true };
     });
+  }
+
+  private async assertBrokerInOrganization(
+    tx: Prisma.TransactionClient,
+    brokerUserId: string,
+    organizationId: string,
+  ) {
+    const u = await tx.user.findUnique({ where: { id: brokerUserId } });
+    if (!u || u.organizationId !== organizationId) {
+      throw new NotFoundException('Broker user not found in this organization');
+    }
   }
 
   private async assertUnitInOrganization(

@@ -9,6 +9,7 @@ import {
   IsObject,
   IsOptional,
   IsUUID,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { LeaseUnitLineDto } from './lease-unit-line.dto';
@@ -35,6 +36,16 @@ export class CreateLeaseDto {
   @IsOptional()
   @IsObject()
   terms?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Optional staff user (same organization) attributed for collections / performance.',
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsUUID()
+  brokerUserId?: string | null;
 
   @ApiProperty({ type: [LeaseUnitLineDto] })
   @IsArray()

@@ -16,23 +16,31 @@ import {
   Typography,
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom'
 import { useDashboard } from '../dashboard/context'
-
-const NAV_LINKS: { to: string; label: string }[] = [
-  { to: '/', label: 'Home' },
-  { to: '/organizations', label: 'Organizations' },
-  { to: '/portfolios', label: 'Portfolios' },
-  { to: '/tenants', label: 'Tenants' },
-  { to: '/leases', label: 'Leases' },
-  { to: '/billing/schedules', label: 'Charge schedules' },
-  { to: '/billing/invoices', label: 'Invoices' },
-  { to: '/billing/ledger', label: 'Ledger' },
-]
+import { PERFORMANCE_VIEW_ROLES } from '../dashboard/types'
 
 export function DashboardShell() {
   const { me, signOut, billingLeaseId, setBillingLeaseId } = useDashboard()
+
+  const navLinks = useMemo(() => {
+    const perf =
+      me && PERFORMANCE_VIEW_ROLES.has(me.role)
+        ? [{ to: '/performance', label: 'Performance' }]
+        : []
+    return [
+      { to: '/', label: 'Home' },
+      ...perf,
+      { to: '/organizations', label: 'Organizations' },
+      { to: '/portfolios', label: 'Portfolios' },
+      { to: '/tenants', label: 'Tenants' },
+      { to: '/leases', label: 'Leases' },
+      { to: '/billing/schedules', label: 'Charge schedules' },
+      { to: '/billing/invoices', label: 'Invoices' },
+      { to: '/billing/ledger', label: 'Ledger' },
+    ]
+  }, [me])
   const [menuEl, setMenuEl] = useState<null | HTMLElement>(null)
   const location = useLocation()
   const menuOpen = Boolean(menuEl)
@@ -122,7 +130,7 @@ export function DashboardShell() {
               },
             }}
           >
-            {NAV_LINKS.map(({ to, label }) => (
+            {navLinks.map(({ to, label }) => (
               <MenuItem
                 key={to}
                 component={RouterLink}
@@ -142,7 +150,7 @@ export function DashboardShell() {
             useFlexGap
             sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center' }}
           >
-            {NAV_LINKS.map(({ to, label }) => (
+            {navLinks.map(({ to, label }) => (
               <Button
                 key={to}
                 component={RouterLink}
@@ -169,12 +177,15 @@ export function DashboardShell() {
                 }}
               />
               <Avatar
+                component={RouterLink}
+                to="/profile"
                 sx={{
                   width: 38,
                   height: 38,
                   bgcolor: 'secondary.main',
                   fontSize: '0.95rem',
                   fontWeight: 700,
+                  textDecoration: 'none',
                 }}
               >
                 {(me.displayName?.[0] ?? me.email?.[0] ?? '?').toUpperCase()}

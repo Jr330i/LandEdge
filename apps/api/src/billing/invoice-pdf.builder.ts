@@ -4,7 +4,7 @@ import PDFDocument from 'pdfkit';
 export type InvoicePdfRow = Invoice & {
   lines: InvoiceLine[];
   tenant: Pick<Tenant, 'legalName' | 'tradingName'>;
-  organization: Pick<Organization, 'name'>;
+  organization: Pick<Organization, 'name' | 'settings'>;
 };
 
 function fmtDate(d: Date): string {
@@ -18,8 +18,51 @@ function fmtMoney(currency: string, n: number): string {
   })}`;
 }
 
+type InvoiceProfile = {
+  legalName?: string | null;
+  taxNumber?: string | null;
+  bankDetails?: string | null;
+  paymentInstructions?: string | null;
+  logoUrl?: string | null;
+};
+
+async function loadLogoBuffer(logoUrl?: string | null): Promise<Buffer | null> {
+  const u = logoUrl?.trim();
+  if (!u) return null;
+  try {
+    const res = await fetch(u);
+    if (!res.ok) return null;
+    const ct = res.headers.get('content-type') ?? '';
+    if (!ct.includes('png') && !ct.includes('jpeg') && !ct.includes('jpg')) {
+      return null;
+    }
+    const ab = await res.arrayBuffer();
+    return Buffer.from(ab);
+  } catch {
+    return null;
+  }
+}
+
+function readInvoiceProfile(settings: unknown): InvoiceProfile {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return {};
+  const root = settings as Record<string, unknown>;
+  const raw = root.invoiceProfile;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const p = raw as Record<string, unknown>;
+  return {
+    legalName: typeof p.legalName === 'string' ? p.legalName : null,
+    taxNumber: typeof p.taxNumber === 'string' ? p.taxNumber : null,
+    bankDetails: typeof p.bankDetails === 'string' ? p.bankDetails : null,
+    paymentInstructions:
+      typeof p.paymentInstructions === 'string' ? p.paymentInstructions : null,
+    logoUrl: typeof p.logoUrl === 'string' ? p.logoUrl : null,
+  };
+}
+
 export function renderInvoicePdf(row: InvoicePdfRow): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
+  return loadLogoBuffer(readInvoiceProfile(row.organization.settings).logoUrl).then(
+    (logoBuffer) =>
+      new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     const doc = new PDFDocument({ margin: 48, size: 'A4' });
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -34,8 +77,17 @@ export function renderInvoicePdf(row: InvoicePdfRow): Promise<Buffer> {
 
     const tenantLabel =
       row.tenant.tradingName?.trim() || row.tenant.legalName;
+    const profile = readInvoiceProfile(row.organization.settings);
+    const issuerName = profile.legalName?.trim() || row.organization.name;
 
-    doc.fontSize(18).text(row.organization.name);
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, 430, 40, { fit: [120, 48], align: 'right' });
+      } catch {
+        // Ignore invalid image payloads; keep PDF generation resilient.
+      }
+    }
+    doc.fontSize(18).text(issuerName);
     doc.moveDown(0.25);
     doc.fontSize(11).fillColor('#444').text('Invoice');
     doc.fillColor('#000000');
@@ -49,7 +101,13 @@ export function renderInvoicePdf(row: InvoicePdfRow): Promise<Buffer> {
     if (row.dueDate) {
       doc.text(`Due: ${fmtDate(row.dueDate)}`);
     }
+    if (profile.taxNumber?.trim()) {
+      doc.text(`Tax/VAT #: ${profile.taxNumber.trim()}`);
+    }
     doc.text(`Currency: ${row.currency}`);
+    if (profile.logoUrl?.trim()) {
+      doc.text(`Logo URL: ${profile.logoUrl.trim()}`);
+    }
     doc.moveDown();
     doc.fontSize(11).text('Bill to', { underline: true });
     doc.fontSize(10);
@@ -109,6 +167,19 @@ export function renderInvoicePdf(row: InvoicePdfRow): Promise<Buffer> {
       doc.text(row.notes.trim(), { width: 500 });
     }
 
+    if (profile.bankDetails?.trim() || profile.paymentInstructions?.trim()) {
+      doc.moveDown(1.25);
+      doc.fontSize(10).text('Payment details', { underline: true });
+      if (profile.bankDetails?.trim()) {
+        doc.text(`Bank: ${profile.bankDetails.trim()}`, { width: 500 });
+      }
+      if (profile.paymentInstructions?.trim()) {
+        doc.text(`Instructions: ${profile.paymentInstructions.trim()}`, {
+          width: 500,
+        });
+      }
+    }
+
     doc.moveDown(2);
     doc.fontSize(8).fillColor('#888888');
     doc.text(
@@ -116,5 +187,6 @@ export function renderInvoicePdf(row: InvoicePdfRow): Promise<Buffer> {
     );
 
     doc.end();
-  });
+  }),
+  );
 }
