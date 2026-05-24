@@ -111,6 +111,20 @@ export class OrganizationsController {
     return this.organizationsService.createUser(id, dto, user);
   }
 
+  @Post(':id/users/:userId/invite')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @ApiOperation({
+    summary: 'Resend portal/console invite email with password setup link',
+  })
+  sendUserInvite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.organizationsService.sendUserInvite(id, userId, user);
+  }
+
   @Patch(':id/users/:userId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)

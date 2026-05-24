@@ -43,6 +43,7 @@ Admin UI (JWT): organizations, **portfolios** (list/create with org picker for *
 
 - Health: `GET http://localhost:3000/api/v1/health` (public)
 - Auth: `POST http://localhost:3000/api/v1/auth/login` (public) — body: `organizationSlug`, `email`, `password`
+- Password reset (public, requires SMTP for email delivery): `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`
 - Organizations: `GET http://localhost:3000/api/v1/organizations` (Bearer JWT) — `SUPER_ADMIN` sees all; others own org only. `POST` creates org (**SUPER_ADMIN** only).
 - Property hierarchy (Bearer JWT): `GET/POST/PATCH/DELETE /api/v1/portfolios` (create/update DTO may include `organizationId` for **SUPER_ADMIN** only); `GET /api/v1/buildings?portfolioId=`; `GET /api/v1/floors?buildingId=`; `GET /api/v1/units?floorId=` and `GET /api/v1/units/:id` (each includes `floor.buildingId` for clients) — writes restricted to **SUPER_ADMIN**, **ORG_ADMIN**, **PORTFOLIO_MANAGER** (RLS enforced in Postgres).
 - Dashboard: `GET /api/v1/dashboard/metrics` — scoped counts (leases, tenants, invoices, ledger lines) for the home page; avoids loading full billing lists at login.

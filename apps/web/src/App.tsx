@@ -36,6 +36,7 @@ import {
   TenantsPage,
 } from './pages/DetailPages'
 import { LoginPage } from './pages/LoginPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import {
   OwnerInvoicesPage,
   OwnerInvoiceDetailPage,
@@ -48,7 +49,7 @@ import {
   TenantStatementPage,
 } from './pages/PortalPages'
 
-function App() {
+function AppRoot() {
   const [token, setToken] = useState<string | null>(() =>
     sessionStorage.getItem(TOKEN_KEY),
   )
@@ -457,10 +458,9 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <DashboardContext.Provider value={dashboardValue}>
-        <Routes>
-          <Route path="/" element={<DashboardShell />}>
+    <DashboardContext.Provider value={dashboardValue}>
+      <Routes>
+        <Route path="/" element={<DashboardShell />}>
             <Route
               index
               element={
@@ -573,9 +573,19 @@ function App() {
               element={canAccessConsole ? <BillingLedgerPage /> : <Navigate to="/" replace />}
             />
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </DashboardContext.Provider>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </DashboardContext.Provider>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/*" element={<AppRoot />} />
+      </Routes>
     </BrowserRouter>
   )
 }

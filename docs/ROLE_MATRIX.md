@@ -29,6 +29,10 @@ This is the current permission baseline for the back-office app.
   - `GET /organizations`, `GET /organizations/:id`: console-access roles
   - `POST /organizations`: `SUPER_ADMIN`
   - `PATCH /organizations/:id/invoice-profile`: `SUPER_ADMIN`, `ORG_ADMIN`
+  - User CRUD (`GET/POST/PATCH/DELETE /organizations/:id/users...`): `SUPER_ADMIN`, `ORG_ADMIN` (hierarchy enforced)
+  - `POST /organizations/:id/users/:userId/invite`: resend invite email
+- **Auth (public)**
+  - `POST /auth/login`, `POST /auth/forgot-password`, `POST /auth/reset-password`
 - **Property hierarchy (portfolios/buildings/floors/units)**
   - Read endpoints: console-access roles
   - Create/update/delete/reorder: property write roles

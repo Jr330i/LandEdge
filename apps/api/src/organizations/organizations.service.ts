@@ -7,7 +7,9 @@ import {
 } from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { AuthService } from '../auth/auth.service';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto';
@@ -25,7 +27,11 @@ function slugifyName(name: string): string {
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
+    private readonly mail: MailService,
+  ) {}
 
   private assertCanManageRole(actorRole: UserRole, targetRole: UserRole) {
     if (actorRole === UserRole.SUPER_ADMIN) {
@@ -231,12 +237,15 @@ export class OrganizationsService {
   ) {
     this.assertOrgScope(actor, organizationId);
     this.assertCanManageRole(actor.role, dto.role);
-    return this.prisma.withUserRls(actor, async (tx) => {
+
+    const result = await this.prisma.withUserRls(actor, async (tx) => {
       const org = await tx.organization.findUnique({
         where: { id: organizationId },
       });
       if (!org) throw new NotFoundException('Organization not found');
-      const passwordHash = await bcrypt.hash(dto.password, 10);
+      const passwordHash = dto.password
+        ? await bcrypt.hash(dto.password, 10)
+        : null;
       try {
         const created = await tx.user.create({
           data: {
@@ -265,13 +274,8 @@ export class OrganizationsService {
           );
         }
         return {
-          id: created.id,
-          email: created.email,
-          displayName: created.displayName,
-          role: created.role,
-          hasPassword: !!created.passwordHash,
-          createdAt: created.createdAt,
-          updatedAt: created.updatedAt,
+          user: created,
+          org,
         };
       } catch (e) {
         if (
@@ -285,6 +289,65 @@ export class OrganizationsService {
         throw e;
       }
     });
+
+    let inviteEmailSent = false;
+    if (!dto.password || dto.sendInviteEmail) {
+      inviteEmailSent = await this.authService.sendInviteEmail({
+        userId: result.user.id,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        organizationId: result.org.id,
+        organizationName: result.org.name,
+        organizationSlug: result.org.slug,
+      });
+    }
+
+    return {
+      id: result.user.id,
+      email: result.user.email,
+      displayName: result.user.displayName,
+      role: result.user.role,
+      hasPassword: !!result.user.passwordHash,
+      createdAt: result.user.createdAt,
+      updatedAt: result.user.updatedAt,
+      inviteEmailSent,
+      inviteEmailConfigured: this.mail.isConfigured(),
+    };
+  }
+
+  async sendUserInvite(
+    organizationId: string,
+    userId: string,
+    actor: JwtAccessPayload,
+  ) {
+    this.assertOrgScope(actor, organizationId);
+    const row = await this.prisma.withUserRls(actor, async (tx) => {
+      const org = await tx.organization.findUnique({
+        where: { id: organizationId },
+      });
+      if (!org) throw new NotFoundException('Organization not found');
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user || user.organizationId !== organizationId) {
+        throw new NotFoundException('User not found');
+      }
+      this.assertCanManageRole(actor.role, user.role);
+      return { org, user };
+    });
+
+    const inviteEmailSent = await this.authService.sendInviteEmail({
+      userId: row.user.id,
+      email: row.user.email,
+      displayName: row.user.displayName,
+      organizationId: row.org.id,
+      organizationName: row.org.name,
+      organizationSlug: row.org.slug,
+    });
+
+    return {
+      ok: true,
+      inviteEmailSent,
+      inviteEmailConfigured: this.mail.isConfigured(),
+    };
   }
 
   async updateUser(
