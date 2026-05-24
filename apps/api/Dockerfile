@@ -6,6 +6,8 @@ WORKDIR /app
 COPY package.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
+# postinstall runs `prisma generate` — schema must exist before npm install
+COPY apps/api/prisma apps/api/prisma
 RUN npm install
 
 COPY apps/api apps/api
