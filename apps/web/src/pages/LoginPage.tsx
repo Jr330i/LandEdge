@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import type { FormEvent } from 'react'
+import { useState } from 'react'
 import type { Health } from '../dashboard/types'
 
 type LoginPageProps = {
@@ -43,6 +44,37 @@ export function LoginPage({
   healthErr,
 }: LoginPageProps) {
   const apiOk = Boolean(health && !healthErr)
+  const [mode, setMode] = useState<'login' | 'forgot'>('login')
+  const [forgotErr, setForgotErr] = useState<string | null>(null)
+  const [forgotOk, setForgotOk] = useState(false)
+  const [forgotLoading, setForgotLoading] = useState(false)
+
+  const handleForgot = (e: FormEvent) => {
+    e.preventDefault()
+    setForgotErr(null)
+    setForgotOk(false)
+    setForgotLoading(true)
+    fetch('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizationSlug: loginSlug.trim(),
+        email: loginEmail.trim(),
+      }),
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = (await r.json().catch(() => ({}))) as { message?: string | string[] }
+          const m = body.message
+          throw new Error(
+            typeof m === 'string' ? m : Array.isArray(m) ? m.join('; ') : 'Request failed',
+          )
+        }
+      })
+      .then(() => setForgotOk(true))
+      .catch((err: Error) => setForgotErr(err.message))
+      .finally(() => setForgotLoading(false))
+  }
 
   return (
     <Box
@@ -176,8 +208,8 @@ export function LoginPage({
         }}
       >
         <Paper
-          component="form"
-          onSubmit={handleLogin}
+          component={mode === 'login' ? 'form' : 'div'}
+          onSubmit={mode === 'login' ? handleLogin : undefined}
           elevation={0}
           sx={{
             width: '100%',
@@ -190,20 +222,68 @@ export function LoginPage({
           }}
         >
           <Typography variant="overline" color="primary" fontWeight={700}>
-            Welcome back
+            {mode === 'login' ? 'Welcome back' : 'Password reset'}
           </Typography>
           <Typography variant="h5" sx={{ mt: 0.5, mb: 0.5, fontWeight: 700 }}>
-            Sign in to continue
+            {mode === 'login' ? 'Sign in to continue' : 'Forgot your password?'}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Seeded demo: <code>super@demo.sofinda.local</code> / <code>demo123</code>{' '}
-            · org <code>demo</code>
+            {mode === 'login' ? (
+              <>
+                Seeded demo: <code>super@demo.sofinda.local</code> / <code>demo123</code>{' '}
+                · org <code>demo</code>
+              </>
+            ) : (
+              'Enter your organization slug and email. If an account exists and email is configured, we will send a reset link.'
+            )}
           </Typography>
-          {loginErr && (
+          {(mode === 'login' ? loginErr : forgotErr) && (
             <Alert severity="error" sx={{ mb: 2 }} variant="outlined">
-              {loginErr}
+              {mode === 'login' ? loginErr : forgotErr}
             </Alert>
           )}
+          {mode === 'forgot' && forgotOk ? (
+            <Stack spacing={2}>
+              <Alert severity="success" variant="outlined">
+                If that account exists, a reset link has been sent. Check your inbox.
+              </Alert>
+              <Button variant="outlined" onClick={() => { setMode('login'); setForgotOk(false) }}>
+                Back to sign in
+              </Button>
+            </Stack>
+          ) : mode === 'forgot' ? (
+            <Stack spacing={2.25} component="form" onSubmit={handleForgot}>
+              <TextField
+                label="Organization slug"
+                value={loginSlug}
+                onChange={(e) => setLoginSlug(e.target.value)}
+                required
+                fullWidth
+                autoComplete="organization"
+              />
+              <TextField
+                label="Email"
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required
+                fullWidth
+                autoComplete="username"
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={forgotLoading}
+                fullWidth
+              >
+                {forgotLoading ? 'Sending…' : 'Send reset link'}
+              </Button>
+              <Button type="button" size="small" onClick={() => setMode('login')}>
+                Back to sign in
+              </Button>
+            </Stack>
+          ) : (
           <Stack spacing={2.25}>
             <TextField
               label="Organization slug"
@@ -240,7 +320,11 @@ export function LoginPage({
             >
               {loginLoading ? 'Signing in…' : 'Sign in'}
             </Button>
+            <Button type="button" size="small" onClick={() => setMode('forgot')}>
+              Forgot password?
+            </Button>
           </Stack>
+          )}
         </Paper>
 
         <Stack

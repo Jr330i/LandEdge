@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
+import { AuthService } from '../auth/auth.service';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationsService } from './organizations.service';
 
@@ -35,6 +37,14 @@ describe('OrganizationsService', () => {
       providers: [
         OrganizationsService,
         { provide: PrismaService, useValue: prismaMock },
+        {
+          provide: AuthService,
+          useValue: { sendInviteEmail: jest.fn().mockResolvedValue(false) },
+        },
+        {
+          provide: MailService,
+          useValue: { isConfigured: jest.fn().mockReturnValue(false) },
+        },
       ],
     }).compile();
 

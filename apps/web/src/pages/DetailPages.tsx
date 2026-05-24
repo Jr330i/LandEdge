@@ -845,6 +845,7 @@ export function OrganizationsPage() {
   const [newUserDisplayName, setNewUserDisplayName] = useState('')
   const [newUserRole, setNewUserRole] = useState<string>('READ_ONLY')
   const [newUserPassword, setNewUserPassword] = useState('demo123')
+  const [newUserInviteOnly, setNewUserInviteOnly] = useState(false)
   const [newUserSaving, setNewUserSaving] = useState(false)
   const [newUserErr, setNewUserErr] = useState<string | null>(null)
   const [editingUser, setEditingUser] = useState<OrganizationUserRow | null>(null)
@@ -1034,6 +1035,8 @@ export function OrganizationsPage() {
     reloadOrgUsers()
   }, [reloadOrgUsers])
 
+  const [inviteUserErr, setInviteUserErr] = useState<string | null>(null)
+
   const submitCreateUser = (e: FormEvent) => {
     e.preventDefault()
     if (!token || !userOrgId || !canManageUsers) return
@@ -1042,23 +1045,30 @@ export function OrganizationsPage() {
       setNewUserErr('Email is required.')
       return
     }
-    if (!newUserPassword.trim() || newUserPassword.trim().length < 6) {
-      setNewUserErr('Password must be at least 6 characters.')
-      return
+    if (!newUserInviteOnly) {
+      if (!newUserPassword.trim() || newUserPassword.trim().length < 6) {
+        setNewUserErr('Password must be at least 6 characters.')
+        return
+      }
     }
     setNewUserSaving(true)
+    const body: Record<string, string | boolean> = {
+      email: newUserEmail.trim().toLowerCase(),
+      role: newUserRole,
+    }
+    if (newUserDisplayName.trim()) body.displayName = newUserDisplayName.trim()
+    if (newUserInviteOnly) {
+      body.sendInviteEmail = true
+    } else {
+      body.password = newUserPassword
+    }
     fetch(`/api/v1/organizations/${userOrgId}/users`, {
       method: 'POST',
       headers: {
         ...authHeaders(token),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email: newUserEmail.trim().toLowerCase(),
-        displayName: newUserDisplayName.trim() || undefined,
-        role: newUserRole,
-        password: newUserPassword,
-      }),
+      body: JSON.stringify(body),
     })
       .then(async (r) => {
         if (r.status === 401) {
@@ -1066,17 +1076,51 @@ export function OrganizationsPage() {
           throw new Error('Session expired')
         }
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<{ inviteEmailSent?: boolean; inviteEmailConfigured?: boolean }>
       })
-      .then(() => {
+      .then((data) => {
         setNewUserEmail('')
         setNewUserDisplayName('')
         setNewUserRole(assignableRoles[0] ?? 'READ_ONLY')
         setNewUserPassword('demo123')
+        setNewUserInviteOnly(false)
         reloadOrgUsers()
         reloadOrganizations()
+        if (newUserInviteOnly && data.inviteEmailConfigured && !data.inviteEmailSent) {
+          setNewUserErr('User created but invite email could not be sent.')
+        } else if (newUserInviteOnly && !data.inviteEmailConfigured) {
+          setNewUserErr(
+            'User created without password. SMTP is not configured — resend invite after setting SMTP env.',
+          )
+        }
       })
       .catch((err: Error) => setNewUserErr(err.message))
       .finally(() => setNewUserSaving(false))
+  }
+
+  const resendInvite = (u: OrganizationUserRow) => {
+    if (!token || !canManageUsers || !userOrgId) return
+    setInviteUserErr(null)
+    fetch(`/api/v1/organizations/${userOrgId}/users/${u.id}/invite`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<{ inviteEmailSent?: boolean; inviteEmailConfigured?: boolean }>
+      })
+      .then((data) => {
+        if (!data.inviteEmailConfigured) {
+          setInviteUserErr('SMTP is not configured on the API.')
+        } else if (!data.inviteEmailSent) {
+          setInviteUserErr('Invite email could not be sent.')
+        }
+      })
+      .catch((err: Error) => setInviteUserErr(err.message))
   }
 
   const openEditUser = (u: OrganizationUserRow) => {
@@ -1233,6 +1277,11 @@ export function OrganizationsPage() {
                   {deleteUserErr}
                 </Alert>
               ) : null}
+              {inviteUserErr ? (
+                <Alert severity="warning" variant="outlined">
+                  {inviteUserErr}
+                </Alert>
+              ) : null}
               <Stack
                 component="form"
                 onSubmit={submitCreateUser}
@@ -1272,19 +1321,29 @@ export function OrganizationsPage() {
                 </FormControl>
                 <TextField
                   size="small"
-                  label="Password"
+                  label={newUserInviteOnly ? 'Password (optional)' : 'Password'}
                   type="password"
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
+                  disabled={newUserInviteOnly}
                   sx={{ minWidth: 180 }}
                 />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={newUserInviteOnly}
+                      onChange={(e) => setNewUserInviteOnly(e.target.checked)}
+                    />
+                  }
+                  label="Invite by email"
+                />
                 <Button type="submit" variant="contained" disabled={newUserSaving || !userOrgId}>
-                  {newUserSaving ? 'Creating…' : 'Create user'}
+                  {newUserSaving ? 'Creating…' : newUserInviteOnly ? 'Create & invite' : 'Create user'}
                 </Button>
               </Stack>
               <Typography variant="caption" color="text.secondary">
-                Security note: tenant users auto-created from the Tenants page have no default password.
-                Use Edit user to set a password and activate login.
+                Invite mode sends a password-setup link when SMTP is configured. Tenant users
+                auto-created from the Tenants page stay pending until invited or given a password.
               </Typography>
 
               {orgUsersErr ? (
@@ -1331,6 +1390,17 @@ export function OrganizationsPage() {
                             </TableCell>
                             <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
                             <TableCell align="right">
+                              {!u.hasPassword && canEdit ? (
+                                <Tooltip title="Resend invite email">
+                                  <IconButton
+                                    size="small"
+                                    aria-label="Resend invite"
+                                    onClick={() => resendInvite(u)}
+                                  >
+                                    <SendOutlined fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : null}
                               <IconButton
                                 size="small"
                                 aria-label="Edit user"

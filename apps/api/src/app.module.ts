@@ -6,6 +6,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { HealthModule } from './health/health.module';
 import { BillingModule } from './billing/billing.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { MailModule } from './mail/mail.module';
 import { PortalModule } from './portal/portal.module';
 import { LeasesModule } from './leases/leases.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -18,6 +19,7 @@ import { PropertyModule } from './property/property.module';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    MailModule,
     PrismaModule,
     AuthModule,
     HealthModule,

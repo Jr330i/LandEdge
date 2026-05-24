@@ -24,6 +24,7 @@ model Organization {
   chargeSchedules  ChargeSchedule[]
   invoices         Invoice[]
   ledgerEntries    LedgerEntry[]
+  paymentTransactions PaymentTransaction[]
 
   @@map("organizations")
 }
@@ -257,6 +258,7 @@ model Invoice {
   updatedAt      DateTime      @updatedAt @map("updated_at")
   lines          InvoiceLine[]
   ledgerEntry    LedgerEntry?
+  payments       PaymentTransaction[]
 
   @@map("invoices")
 }
@@ -281,6 +283,18 @@ enum LedgerSource {
   ADJUSTMENT
 }
 
+enum PaymentProvider {
+  LIPILA
+}
+
+enum PaymentTransactionStatus {
+  INITIATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 /// Append-only tenant sub-ledger line (no updates/deletes via API).
 model LedgerEntry {
   id             String       @id @default(uuid()) @db.Uuid
@@ -300,5 +314,27 @@ model LedgerEntry {
   createdAt      DateTime     @default(now()) @map("created_at")
 
   @@map("ledger_entries")
+}
+
+model PaymentTransaction {
+  id                String                   @id @default(uuid()) @db.Uuid
+  organizationId    String                   @map("organization_id") @db.Uuid
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceId         String                   @map("invoice_id") @db.Uuid
+  invoice           Invoice                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  provider          PaymentProvider
+  providerReference String                   @map("provider_reference")
+  checkoutUrl       String?                  @map("checkout_url")
+  amount            Decimal                  @db.Decimal(14, 2)
+  currency          String                   @default("ZAR")
+  status            PaymentTransactionStatus @default(INITIATED)
+  settledAt         DateTime?                @map("settled_at")
+  rawRequest        Json?                    @map("raw_request")
+  rawResponse       Json?                    @map("raw_response")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+
+  @@unique([provider, providerReference])
+  @@map("payment_transactions")
 }
 

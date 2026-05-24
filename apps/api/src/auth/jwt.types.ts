@@ -7,3 +7,11 @@ export type JwtAccessPayload = {
   role: UserRole;
   typ: 'access';
 };
+
+export type JwtPasswordResetPayload = {
+  sub: string;
+  email: string;
+  organizationId: string;
+  organizationSlug: string;
+  typ: 'password_reset';
+};

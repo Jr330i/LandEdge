@@ -3,11 +3,14 @@
   "private": true,
   "description": "Sofinda — property sub-ledger and operational intelligence platform (PRD v5.0)",
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   },
   "workspaces": [
     "apps/*"
   ],
+  "dependencies": {
+    "@nestjs/platform-express": "^11.0.1"
+  },
   "scripts": {
     "dev:api": "npm run start:dev -w api",
     "dev:web": "npm run dev -w web",

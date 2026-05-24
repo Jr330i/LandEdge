@@ -40,14 +40,15 @@ Short list of intentional gaps / next steps. Revisit when planning sprints.
 - **Done:** Dedicated portal routes and nav for `TENANT_USER` and `OWNER_USER` (not admin console).
 - **Done (tenant):** Overview, paginated invoices + detail + PDF download, paginated statement + CSV export, leases list. Tenant linked by contact email (or sole tenant in org).
 - **Done (owner):** Overview, properties drill-down, paginated invoices + detail + PDF (read-only).
+- **Done:** Password reset (`POST /auth/forgot-password`, `/auth/reset-password`) and org user invite/resend (`POST /organizations/:id/users` without password, `POST .../users/:userId/invite`).
 - **Blocked on Lipila approval:** Online pay (“Pay with Lipila”) in tenant portal and payment transaction history UI.
-- **Later:** Portal user invite/onboarding email flow (admin sets password manually today).
 
 ## Deploy & CI
 
 - **Done:** `apps/api/Dockerfile`, `apps/web/Dockerfile` (nginx), `docker-compose.prod.yml` for full stack.
 - **Done:** GitHub Actions CI (`.github/workflows/ci.yml`) — build, unit tests, e2e with Postgres.
-- **Later:** Production SMTP, Lipila webhook URL, hosted env secrets.
+- **Done:** SMTP env documented (`SMTP_*`, `APP_PUBLIC_URL`) for invoice email, invites, and password reset in production/docker.
+- **Later:** Lipila webhook URL, hosted env secrets.
 
 ## Next major candidates (unstarted)
 

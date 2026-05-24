@@ -43,11 +43,11 @@ const runDb = process.env.E2E_DB === '1';
           password: 'demo123',
         })
         .expect(200);
-
+    
       const loginBody = login.body as { access_token?: string };
       const token = loginBody.access_token;
       expect(token).toBeDefined();
-
+    
       await request(app.getHttpServer())
         .get('/api/v1/organizations')
         .set('Authorization', `Bearer ${token}`)
