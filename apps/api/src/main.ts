@@ -1,14 +1,11 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import express from 'express';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './prisma/prisma-exception.filter';
 
 async function bootstrap() {
-  const server = express();
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+  const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new PrismaExceptionFilter());
@@ -21,10 +18,13 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: [
-      /^http:\/\/localhost:\d+$/,
-      /^http:\/\/127\.0\.0\.1:\d+$/,
-    ],
+    origin: (() => {
+      const raw = process.env.CORS_ORIGINS?.trim();
+      if (raw) {
+        return raw.split(',').map((s) => s.trim()).filter(Boolean);
+      }
+      return [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/];
+    })(),
     credentials: true,
   });
 
@@ -42,4 +42,4 @@ async function bootstrap() {
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port);
 }
-bootstrap();
+void bootstrap();

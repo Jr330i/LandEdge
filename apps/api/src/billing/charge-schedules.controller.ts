@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { BILLING_WRITE_ROLES } from './billing.constants';
@@ -29,6 +30,8 @@ import { UpdateChargeScheduleDto } from './dto/update-charge-schedule.dto';
 @ApiTags('billing — charge schedules')
 @ApiBearerAuth()
 @Controller('billing/charge-schedules')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class ChargeSchedulesController {
   constructor(private readonly service: ChargeSchedulesService) {}
 

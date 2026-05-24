@@ -61,12 +61,13 @@ describe('OrganizationsService', () => {
       superActor,
     );
 
-    expect(orgApi.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        name: 'Acme',
-        slug: 'acme',
-      }),
-    });
+    expect(orgApi.create).toHaveBeenCalledTimes(1);
+    const createCalls = orgApi.create.mock.calls as unknown as Array<
+      [{ data: { name: string; slug: string } }]
+    >;
+    const createArg = createCalls[0]?.[0];
+    expect(createArg.data.name).toBe('Acme');
+    expect(createArg.data.slug).toBe('acme');
   });
 
   it('create slugifies name when slug omitted', async () => {
@@ -74,11 +75,12 @@ describe('OrganizationsService', () => {
 
     await service.create({ name: 'Hello   World' }, superActor);
 
-    expect(orgApi.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        slug: 'hello-world',
-      }),
-    });
+    expect(orgApi.create).toHaveBeenCalledTimes(1);
+    const createCalls = orgApi.create.mock.calls as unknown as Array<
+      [{ data: { slug: string } }]
+    >;
+    const createArg = createCalls[0]?.[0];
+    expect(createArg.data.slug).toBe('hello-world');
   });
 
   it('create throws when slug cannot be derived', async () => {
@@ -98,8 +100,11 @@ describe('OrganizationsService', () => {
       typ: 'access',
     };
     await service.findAllForUser(user);
-    const arg = orgApi.findMany.mock.calls[0][0];
-    expect(arg.where).toBeUndefined();
+    const findCalls = orgApi.findMany.mock.calls as unknown as Array<
+      [{ where?: { id: string } }]
+    >;
+    const findArg = findCalls[0]?.[0];
+    expect(findArg?.where).toBeUndefined();
   });
 
   it('findAllForUser scopes to organization for ORG_ADMIN', async () => {

@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreatePortfolioDto {
   @ApiProperty({ example: 'Retail — Western Cape' })
@@ -15,7 +21,8 @@ export class CreatePortfolioDto {
   region?: string;
 
   @ApiPropertyOptional({
-    description: 'Target organization (SUPER_ADMIN only); defaults to caller org',
+    description:
+      'Target organization (SUPER_ADMIN only); defaults to caller org',
   })
   @IsOptional()
   @IsUUID()

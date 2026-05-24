@@ -14,7 +14,9 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
   }
 
   /** Credential lookup (slug + user) — enables `app.rls_login` policies only inside this transaction. */
-  withLoginRls<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  withLoginRls<T>(
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
     return this.$transaction(async (tx) => {
       await setLoginRlsSession(tx);
       return fn(tx);

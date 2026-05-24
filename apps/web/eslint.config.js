@@ -19,5 +19,16 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Too strict for common data-fetch / reset patterns; triggers false positives on fetch helpers.
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  {
+    files: ['src/components/DashboardUi.tsx', 'src/dashboard/context.tsx'],
+    rules: {
+      // Shared helpers + context alongside components is intentional here.
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -18,6 +19,46 @@ type TenantListParams = {
 @Injectable()
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async ensureTenantUserForTenant(
+    tx: Parameters<Parameters<PrismaService['withUserRls']>[1]>[0],
+    organizationId: string,
+    contactEmail: string,
+    tradingName?: string | null,
+    legalName?: string | null,
+  ) {
+    const email = contactEmail.trim().toLowerCase();
+    const existing = await tx.user.findUnique({
+      where: {
+        organizationId_email: {
+          organizationId,
+          email,
+        },
+      },
+    });
+    const displayName = tradingName?.trim() || legalName?.trim() || null;
+    if (existing) {
+      if (existing.role === UserRole.TENANT_USER) {
+        await tx.user.update({
+          where: { id: existing.id },
+          data: { displayName },
+        });
+        return;
+      }
+      throw new ConflictException(
+        `Contact email ${email} already belongs to a non-tenant user role`,
+      );
+    }
+    await tx.user.create({
+      data: {
+        organizationId,
+        email,
+        role: UserRole.TENANT_USER,
+        displayName,
+        passwordHash: null,
+      },
+    });
+  }
 
   findAll(actor: JwtAccessPayload, params?: TenantListParams) {
     const q = params?.q?.trim();
@@ -89,8 +130,8 @@ export class TenantsService {
 
   create(actor: JwtAccessPayload, dto: CreateTenantDto) {
     const organizationId = actor.organizationId;
-    return this.prisma.withUserRls(actor, (tx) =>
-      tx.tenant.create({
+    return this.prisma.withUserRls(actor, async (tx) => {
+      const created = await tx.tenant.create({
         data: {
           organizationId,
           legalName: dto.legalName.trim(),
@@ -99,8 +140,26 @@ export class TenantsService {
           contactPhone: dto.contactPhone?.trim(),
         },
         include: { _count: { select: { leases: true } } },
-      }),
-    );
+      });
+      if (created.contactEmail) {
+        try {
+          await this.ensureTenantUserForTenant(
+            tx,
+            organizationId,
+            created.contactEmail,
+            created.tradingName,
+            created.legalName,
+          );
+        } catch (e) {
+          throw new ConflictException(
+            e instanceof Error
+              ? e.message
+              : 'Could not auto-create linked tenant user',
+          );
+        }
+      }
+      return created;
+    });
   }
 
   update(id: string, actor: JwtAccessPayload, dto: UpdateTenantDto) {
@@ -115,10 +174,12 @@ export class TenantsService {
       ) {
         throw new NotFoundException('Tenant not found');
       }
-      return tx.tenant.update({
+      const updated = await tx.tenant.update({
         where: { id },
         data: {
-          ...(dto.legalName !== undefined && { legalName: dto.legalName.trim() }),
+          ...(dto.legalName !== undefined && {
+            legalName: dto.legalName.trim(),
+          }),
           ...(dto.tradingName !== undefined && {
             tradingName: dto.tradingName?.trim() ?? null,
           }),
@@ -131,6 +192,16 @@ export class TenantsService {
         },
         include: { _count: { select: { leases: true } } },
       });
+      if (updated.contactEmail) {
+        await this.ensureTenantUserForTenant(
+          tx,
+          updated.organizationId,
+          updated.contactEmail,
+          updated.tradingName,
+          updated.legalName,
+        );
+      }
+      return updated;
     });
   }
 

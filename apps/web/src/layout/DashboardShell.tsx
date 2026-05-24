@@ -19,19 +19,44 @@ import { alpha } from '@mui/material/styles'
 import { useEffect, useMemo, useState } from 'react'
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom'
 import { useDashboard } from '../dashboard/context'
-import { PERFORMANCE_VIEW_ROLES } from '../dashboard/types'
+import { CONSOLE_ACCESS_ROLES, PERFORMANCE_VIEW_ROLES } from '../dashboard/types'
+
+const FACILITIES_ALLOWED = new Set(['/portfolios', '/leases'])
+const READ_ONLY_ALLOWED = new Set([
+  '/organizations',
+  '/portfolios',
+  '/tenants',
+  '/leases',
+  '/billing/schedules',
+  '/billing/invoices',
+  '/billing/ledger',
+])
 
 export function DashboardShell() {
   const { me, signOut, billingLeaseId, setBillingLeaseId } = useDashboard()
 
   const navLinks = useMemo(() => {
+    if (me?.role === 'TENANT_USER') {
+      return [
+        { to: '/portal/tenant', label: 'Home' },
+        { to: '/portal/tenant/invoices', label: 'Invoices' },
+        { to: '/portal/tenant/statement', label: 'Statement' },
+        { to: '/portal/tenant/leases', label: 'Leases' },
+      ]
+    }
+    if (me?.role === 'OWNER_USER') {
+      return [
+        { to: '/portal/owner', label: 'Home' },
+        { to: '/portal/owner/properties', label: 'Properties' },
+        { to: '/portal/owner/invoices', label: 'Invoices' },
+      ]
+    }
+    const consoleAllowed = !!me && CONSOLE_ACCESS_ROLES.has(me.role)
     const perf =
       me && PERFORMANCE_VIEW_ROLES.has(me.role)
         ? [{ to: '/performance', label: 'Performance' }]
         : []
-    return [
-      { to: '/', label: 'Home' },
-      ...perf,
+    const allConsoleLinks = [
       { to: '/organizations', label: 'Organizations' },
       { to: '/portfolios', label: 'Portfolios' },
       { to: '/tenants', label: 'Tenants' },
@@ -39,6 +64,18 @@ export function DashboardShell() {
       { to: '/billing/schedules', label: 'Charge schedules' },
       { to: '/billing/invoices', label: 'Invoices' },
       { to: '/billing/ledger', label: 'Ledger' },
+    ]
+    const consoleLinks = consoleAllowed
+      ? allConsoleLinks.filter((l) => {
+          if (me?.role === 'FACILITIES_MANAGER') return FACILITIES_ALLOWED.has(l.to)
+          if (me?.role === 'READ_ONLY') return READ_ONLY_ALLOWED.has(l.to)
+          return true
+        })
+      : []
+    return [
+      { to: '/', label: 'Home' },
+      ...perf,
+      ...consoleLinks,
     ]
   }, [me])
   const [menuEl, setMenuEl] = useState<null | HTMLElement>(null)
@@ -53,6 +90,13 @@ export function DashboardShell() {
     if (!q) return
     if (billingLeaseId !== q) setBillingLeaseId(q)
   }, [location.pathname, location.search, billingLeaseId, setBillingLeaseId])
+
+  const portalSubtitle =
+    me?.role === 'TENANT_USER'
+      ? 'Tenant portal'
+      : me?.role === 'OWNER_USER'
+        ? 'Owner portal'
+        : 'Admin console'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -71,7 +115,7 @@ export function DashboardShell() {
         <Toolbar sx={{ gap: 2, py: 1, minHeight: { xs: 64, sm: 72 }, flexWrap: 'wrap' }}>
           <Button
             component={RouterLink}
-            to="/"
+            to={me?.role === 'TENANT_USER' ? '/portal/tenant' : me?.role === 'OWNER_USER' ? '/portal/owner' : '/'}
             color="inherit"
             sx={{
               textAlign: 'left',
@@ -100,7 +144,7 @@ export function DashboardShell() {
                   Sofinda
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Admin console
+                  {portalSubtitle}
                 </Typography>
               </Box>
             </Stack>
@@ -174,6 +218,17 @@ export function DashboardShell() {
                   fontWeight: 600,
                   display: { xs: 'none', md: 'flex' },
                   textTransform: 'capitalize',
+                }}
+              />
+              <Chip
+                size="small"
+                label={me.organizationName ?? me.organizationSlug ?? me.organizationId}
+                color="default"
+                variant="outlined"
+                sx={{
+                  fontWeight: 600,
+                  display: { xs: 'none', lg: 'flex' },
+                  maxWidth: 220,
                 }}
               />
               <Avatar

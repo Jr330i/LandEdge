@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PROPERTY_WRITE_ROLES } from './property.constants';
@@ -28,6 +29,8 @@ import { PortfoliosService } from './portfolios.service';
 @ApiTags('portfolios')
 @ApiBearerAuth()
 @Controller('portfolios')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class PortfoliosController {
   constructor(private readonly portfoliosService: PortfoliosService) {}
 

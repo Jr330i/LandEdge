@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PROPERTY_WRITE_ROLES } from './property.constants';
@@ -31,6 +32,8 @@ import { UpdateBuildingDto } from './dto/update-building.dto';
 @ApiTags('buildings')
 @ApiBearerAuth()
 @Controller('buildings')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class BuildingsController {
   constructor(private readonly buildingsService: BuildingsService) {}
 
@@ -61,7 +64,11 @@ export class BuildingsController {
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: ReorderBuildingsDto,
   ) {
-    return this.buildingsService.reorder(dto.portfolioId, dto.buildingIds, user);
+    return this.buildingsService.reorder(
+      dto.portfolioId,
+      dto.buildingIds,
+      user,
+    );
   }
 
   @Post()

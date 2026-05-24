@@ -1,9 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
-  LedgerSource,
-  Prisma,
-  UserRole,
-} from '@prisma/client';
+import { LedgerSource, Prisma, UserRole } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ManualLedgerDto } from './dto/manual-ledger.dto';
@@ -88,14 +84,7 @@ export class LedgerService {
   }
 
   findAll(actor: JwtAccessPayload, params: LedgerListParams = {}) {
-    const {
-      page,
-      pageSize,
-      q,
-      source,
-      createdFrom,
-      createdTo,
-    } = params;
+    const { page, pageSize, q, source, createdFrom, createdTo } = params;
     const qTrim = q?.trim();
     const paged =
       page !== undefined ||

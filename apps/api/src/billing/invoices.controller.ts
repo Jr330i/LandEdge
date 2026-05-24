@@ -21,9 +21,11 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { BILLING_WRITE_ROLES } from './billing.constants';
+import { invoicePdfFilename } from './invoice-pdf.builder';
 import { AllocateInvoicePaymentDto } from './dto/allocate-invoice-payment.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { GenerateInvoiceFromSchedulesDto } from './dto/generate-invoice-from-schedules.dto';
@@ -35,6 +37,8 @@ import { InvoicesService } from './invoices.service';
 @ApiTags('billing — invoices')
 @ApiBearerAuth()
 @Controller('billing/invoices')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class InvoicesController {
   constructor(private readonly service: InvoicesService) {}
 
@@ -81,7 +85,9 @@ export class InvoicesController {
   }
 
   @Get('export')
-  @ApiOperation({ summary: 'Download invoices as CSV (line-level rows, same filters as list)' })
+  @ApiOperation({
+    summary: 'Download invoices as CSV (line-level rows, same filters as list)',
+  })
   @ApiProduces('text/csv')
   @ApiQuery({ name: 'leaseId', required: false })
   @ApiQuery({ name: 'tenantId', required: false })
@@ -118,16 +124,20 @@ export class InvoicesController {
   }
 
   @Get(':id/pdf')
-  @ApiOperation({ summary: 'Download invoice as PDF' })
+  @ApiOperation({ summary: 'Download invoice as Zambian tax invoice PDF' })
   @ApiProduces('application/pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Cache-Control', 'no-store')
   async pdf(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtAccessPayload,
   ): Promise<StreamableFile> {
     const buffer = await this.service.buildPdf(id, user);
+    const filename = invoicePdfFilename(id);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
-      disposition: `attachment; filename="sofinda-invoice-${id.slice(0, 8)}.pdf"`,
+      disposition: `attachment; filename="${filename}"`,
+      length: buffer.length,
     });
   }
 
@@ -181,10 +191,7 @@ export class InvoicesController {
   @UseGuards(RolesGuard)
   @Roles(...BILLING_WRITE_ROLES)
   @ApiOperation({ summary: 'Create draft invoice with lines' })
-  create(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: CreateInvoiceDto,
-  ) {
+  create(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateInvoiceDto) {
     return this.service.create(user, dto);
   }
 
@@ -192,7 +199,8 @@ export class InvoicesController {
   @UseGuards(RolesGuard)
   @Roles(...BILLING_WRITE_ROLES)
   @ApiOperation({
-    summary: 'Update draft invoice (partial fields; lines replace all lines when sent)',
+    summary:
+      'Update draft invoice (partial fields; lines replace all lines when sent)',
   })
   updateDraft(
     @Param('id', ParseUUIDPipe) id: string,

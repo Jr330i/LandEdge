@@ -28,7 +28,12 @@ export class ChargeSchedulesService {
       }
       return tx.chargeSchedule.findMany({
         where: { leaseId },
-        orderBy: [{ sortOrder: 'asc' }, { startDate: 'asc' }, { kind: 'asc' }, { id: 'asc' }],
+        orderBy: [
+          { sortOrder: 'asc' },
+          { startDate: 'asc' },
+          { kind: 'asc' },
+          { id: 'asc' },
+        ],
       });
     });
   }
@@ -76,11 +81,7 @@ export class ChargeSchedulesService {
     });
   }
 
-  reorder(
-    leaseId: string,
-    orderedIds: string[],
-    actor: JwtAccessPayload,
-  ) {
+  reorder(leaseId: string, orderedIds: string[], actor: JwtAccessPayload) {
     return this.prisma.withUserRls(actor, async (tx) => {
       const lease = await tx.lease.findUnique({ where: { id: leaseId } });
       if (!lease) {

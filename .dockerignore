@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.github
+*.md
+.env
+.env.*
+!.env.example
+apps/api/coverage
+apps/web/dist
+.cursor

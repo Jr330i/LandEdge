@@ -1,10 +1,5 @@
 import { Type } from 'class-transformer';
-import {
-  IsBoolean,
-  IsDateString,
-  IsOptional,
-  IsUUID,
-} from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsUUID } from 'class-validator';
 
 export class GenerateInvoiceFromSchedulesDto {
   @IsUUID('4')

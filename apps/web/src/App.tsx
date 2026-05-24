@@ -11,6 +11,8 @@ import type {
 } from './dashboard/types'
 import {
   BILLING_WRITE_ROLES,
+  CONSOLE_ACCESS_ROLES,
+  PERFORMANCE_VIEW_ROLES,
   PROPERTY_WRITE_ROLES,
 } from './dashboard/types'
 import { DashboardShell } from './layout/DashboardShell'
@@ -34,6 +36,17 @@ import {
   TenantsPage,
 } from './pages/DetailPages'
 import { LoginPage } from './pages/LoginPage'
+import {
+  OwnerInvoicesPage,
+  OwnerInvoiceDetailPage,
+  OwnerPortalHomePage,
+  OwnerPropertiesPage,
+  TenantInvoiceDetailPage,
+  TenantInvoicesPage,
+  TenantLeasesPage,
+  TenantPortalHomePage,
+  TenantStatementPage,
+} from './pages/PortalPages'
 
 function App() {
   const [token, setToken] = useState<string | null>(() =>
@@ -67,6 +80,7 @@ function App() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
   const [generateSaving, setGenerateSaving] = useState(false)
+  const hasConsoleAccess = me != null && CONSOLE_ACCESS_ROLES.has(me.role)
 
   useEffect(() => {
     fetch('/api/v1/health')
@@ -147,10 +161,17 @@ function App() {
       setNewPortfolioOrganizationId('')
       return
     }
+    if (!hasConsoleAccess) {
+      setOrgs([])
+      setPortfolios([])
+      setDashboardMetrics(null)
+      setDashboardMetricsErr(null)
+      return
+    }
     loadOrganizations(token)
     loadPortfolios(token)
     loadDashboardMetrics(token)
-  }, [token, loadOrganizations, loadPortfolios, loadDashboardMetrics])
+  }, [token, hasConsoleAccess, loadOrganizations, loadPortfolios, loadDashboardMetrics])
 
   const handleLogin = (e: FormEvent) => {
     e.preventDefault()
@@ -240,6 +261,12 @@ function App() {
 
   const canWriteProperty =
     me != null && PROPERTY_WRITE_ROLES.has(me.role)
+  const canAccessConsole =
+    me != null && CONSOLE_ACCESS_ROLES.has(me.role)
+  const canViewPerformance =
+    me != null && PERFORMANCE_VIEW_ROLES.has(me.role)
+  const isTenantUser = me?.role === 'TENANT_USER'
+  const isOwnerUser = me?.role === 'OWNER_USER'
 
   const handleCreatePortfolio = (e: FormEvent) => {
     e.preventDefault()
@@ -434,17 +461,117 @@ function App() {
       <DashboardContext.Provider value={dashboardValue}>
         <Routes>
           <Route path="/" element={<DashboardShell />}>
-            <Route index element={<DashboardHome />} />
-            <Route path="organizations" element={<OrganizationsPage />} />
+            <Route
+              index
+              element={
+                isTenantUser ? (
+                  <Navigate to="/portal/tenant" replace />
+                ) : isOwnerUser ? (
+                  <Navigate to="/portal/owner" replace />
+                ) : (
+                  <DashboardHome />
+                )
+              }
+            />
+            <Route
+              path="portal/tenant"
+              element={
+                isTenantUser ? <TenantPortalHomePage /> : <Navigate to="/" replace />
+              }
+            />
+            <Route
+              path="portal/tenant/invoices"
+              element={
+                isTenantUser ? <TenantInvoicesPage /> : <Navigate to="/" replace />
+              }
+            />
+            <Route
+              path="portal/tenant/invoices/:invoiceId"
+              element={
+                isTenantUser ? (
+                  <TenantInvoiceDetailPage />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
+            <Route
+              path="portal/tenant/statement"
+              element={
+                isTenantUser ? <TenantStatementPage /> : <Navigate to="/" replace />
+              }
+            />
+            <Route
+              path="portal/tenant/leases"
+              element={
+                isTenantUser ? <TenantLeasesPage /> : <Navigate to="/" replace />
+              }
+            />
+            <Route
+              path="portal/owner"
+              element={
+                isOwnerUser ? <OwnerPortalHomePage /> : <Navigate to="/" replace />
+              }
+            />
+            <Route
+              path="portal/owner/properties"
+              element={
+                isOwnerUser ? <OwnerPropertiesPage /> : <Navigate to="/" replace />
+              }
+            />
+            <Route
+              path="portal/owner/invoices/:invoiceId"
+              element={
+                isOwnerUser ? (
+                  <OwnerInvoiceDetailPage />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
+            <Route
+              path="portal/owner/invoices"
+              element={
+                isOwnerUser ? <OwnerInvoicesPage /> : <Navigate to="/" replace />
+              }
+            />
+            <Route
+              path="organizations"
+              element={canAccessConsole ? <OrganizationsPage /> : <Navigate to="/" replace />}
+            />
             <Route path="profile" element={<MyProfilePage />} />
-            <Route path="performance" element={<PerformancePage />} />
-            <Route path="portfolios" element={<PortfoliosPage />} />
-            <Route path="tenants" element={<TenantsPage />} />
-            <Route path="leases" element={<LeasesPage />} />
-            <Route path="billing/schedules" element={<BillingSchedulesPage />} />
-            <Route path="billing/invoices/:invoiceId" element={<BillingInvoiceDetailPage />} />
-            <Route path="billing/invoices" element={<BillingInvoicesPage />} />
-            <Route path="billing/ledger" element={<BillingLedgerPage />} />
+            <Route
+              path="performance"
+              element={canViewPerformance ? <PerformancePage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="portfolios"
+              element={canAccessConsole ? <PortfoliosPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="tenants"
+              element={canAccessConsole ? <TenantsPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="leases"
+              element={canAccessConsole ? <LeasesPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="billing/schedules"
+              element={canAccessConsole ? <BillingSchedulesPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="billing/invoices/:invoiceId"
+              element={canAccessConsole ? <BillingInvoiceDetailPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="billing/invoices"
+              element={canAccessConsole ? <BillingInvoicesPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="billing/ledger"
+              element={canAccessConsole ? <BillingLedgerPage /> : <Navigate to="/" replace />}
+            />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -32,7 +32,9 @@ export class CreateLeaseDto {
   @IsEnum(LeaseStatus)
   status?: LeaseStatus;
 
-  @ApiPropertyOptional({ description: 'Structured lease terms / metadata (JSON)' })
+  @ApiPropertyOptional({
+    description: 'Structured lease terms / metadata (JSON)',
+  })
   @IsOptional()
   @IsObject()
   terms?: Record<string, unknown>;

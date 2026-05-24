@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PROPERTY_WRITE_ROLES } from './property.constants';
@@ -31,6 +32,8 @@ import { UnitsService } from './units.service';
 @ApiTags('units')
 @ApiBearerAuth()
 @Controller('units')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class UnitsController {
   constructor(private readonly unitsService: UnitsService) {}
 
@@ -57,10 +60,7 @@ export class UnitsController {
   @UseGuards(RolesGuard)
   @Roles(...PROPERTY_WRITE_ROLES)
   @ApiOperation({ summary: 'Reorder units within a floor' })
-  reorder(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: ReorderUnitsDto,
-  ) {
+  reorder(@CurrentUser() user: JwtAccessPayload, @Body() dto: ReorderUnitsDto) {
     return this.unitsService.reorder(dto.floorId, dto.unitIds, user);
   }
 
@@ -69,10 +69,7 @@ export class UnitsController {
   @Roles(...PROPERTY_WRITE_ROLES)
   @ApiOperation({ summary: 'Create unit' })
   @ApiCreatedResponse({ description: 'Unit created' })
-  create(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: CreateUnitDto,
-  ) {
+  create(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateUnitDto) {
     return this.unitsService.create(user, dto);
   }
 

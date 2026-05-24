@@ -7,7 +7,10 @@ export class LeaseUnitLineDto {
   @IsUUID()
   unitId!: string;
 
-  @ApiPropertyOptional({ description: 'Share of lease for this unit, default 100', maximum: 100 })
+  @ApiPropertyOptional({
+    description: 'Share of lease for this unit, default 100',
+    maximum: 100,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

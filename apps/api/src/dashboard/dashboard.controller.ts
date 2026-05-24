@@ -9,6 +9,7 @@ import {
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { LEASE_WRITE_ROLES } from '../leases/lease.constants';
@@ -24,6 +25,8 @@ const PERFORMANCE_VIEW_ROLES = [
 @ApiTags('dashboard')
 @ApiBearerAuth()
 @Controller('dashboard')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
@@ -59,12 +62,43 @@ export class DashboardController {
       'Staff users in an organization (for lease broker picker). SUPER_ADMIN may pass organizationId.',
   })
   @ApiQuery({ name: 'organizationId', required: false })
-  @ApiOkResponse({ description: 'organizationId and users (excludes tenant portal roles)' })
+  @ApiOkResponse({
+    description: 'organizationId and users (excludes tenant portal roles)',
+  })
   orgStaff(
     @CurrentUser() user: JwtAccessPayload,
     @Query('organizationId') organizationId?: string,
   ) {
     return this.dashboardService.orgStaff(user, organizationId);
+  }
+
+  @Get('tenant-portal')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.TENANT_USER)
+  @ApiOperation({
+    summary:
+      'Tenant user dashboard snapshot (lease summary, invoices, statement)',
+  })
+  @ApiOkResponse({
+    description:
+      'Tenant-scoped snapshot resolved by current user email + organization',
+  })
+  tenantPortal(@CurrentUser() user: JwtAccessPayload) {
+    return this.dashboardService.tenantPortal(user);
+  }
+
+  @Get('owner-portal')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER_USER)
+  @ApiOperation({
+    summary:
+      'Owner user dashboard snapshot (portfolio, occupancy, billing summary)',
+  })
+  @ApiOkResponse({
+    description: 'Organization-wide owner view snapshot within the scoped org',
+  })
+  ownerPortal(@CurrentUser() user: JwtAccessPayload) {
+    return this.dashboardService.ownerPortal(user);
   }
 
   @Get('performance')

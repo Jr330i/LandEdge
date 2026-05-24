@@ -90,12 +90,14 @@ import type {
   LeaseRow,
   LedgerEntryRow,
   OrganizationRow,
+  OrganizationUserRow,
   PortfolioRow,
   TenantRow,
 } from '../dashboard/types'
 import { PERFORMANCE_VIEW_ROLES } from '../dashboard/types'
 import { readApiErrorMessage } from '../lib/apiError'
 import { authHeaders } from '../lib/auth'
+import { downloadPdfFromResponse } from '../lib/downloadPdf'
 import { LeaseUnitCascadeFields } from './LeaseUnitCascadeFields'
 import { PropertyHierarchyPanel } from './PropertyHierarchyPanel'
 import { usePropertyUnitCascade } from './usePropertyUnitCascade'
@@ -119,6 +121,16 @@ const INVOICE_FILTER_STATUSES = ['DRAFT', 'ISSUED', 'VOID'] as const
 
 const LEDGER_FILTER_SOURCES = ['INVOICE', 'PAYMENT', 'ADJUSTMENT'] as const
 const MANUAL_LEDGER_SOURCES = ['PAYMENT', 'ADJUSTMENT'] as const
+const USER_ROLES = [
+  'SUPER_ADMIN',
+  'ORG_ADMIN',
+  'PORTFOLIO_MANAGER',
+  'FINANCE',
+  'FACILITIES_MANAGER',
+  'READ_ONLY',
+  'OWNER_USER',
+  'TENANT_USER',
+] as const
 
 function invoiceTenantLabel(row: BillingInvoiceRow) {
   if (!row.tenant) return '—'
@@ -805,24 +817,56 @@ export function OrganizationsPage() {
   const [editingOrgProfile, setEditingOrgProfile] = useState<OrganizationRow | null>(null)
   const [orgProfileLegalName, setOrgProfileLegalName] = useState('')
   const [orgProfileTaxNumber, setOrgProfileTaxNumber] = useState('')
+  const [orgProfileAddress, setOrgProfileAddress] = useState('')
+  const [orgProfilePhone, setOrgProfilePhone] = useState('')
+  const [orgProfileEmail, setOrgProfileEmail] = useState('')
   const [orgProfileBankDetails, setOrgProfileBankDetails] = useState('')
   const [orgProfilePaymentInstructions, setOrgProfilePaymentInstructions] = useState('')
   const [orgProfileLogoUrl, setOrgProfileLogoUrl] = useState('')
   const [orgProfileFocusField, setOrgProfileFocusField] = useState<
-    'legalName' | 'taxNumber' | 'bankDetails' | 'paymentInstructions' | 'logoUrl' | null
+    | 'legalName'
+    | 'taxNumber'
+    | 'address'
+    | 'phone'
+    | 'email'
+    | 'bankDetails'
+    | 'paymentInstructions'
+    | 'logoUrl'
+    | null
   >(null)
   const [orgProfileSaving, setOrgProfileSaving] = useState(false)
   const [orgProfileErr, setOrgProfileErr] = useState<string | null>(null)
+  const canManageUsers = me?.role === 'SUPER_ADMIN' || me?.role === 'ORG_ADMIN'
+  const [userOrgId, setUserOrgId] = useState('')
+  const [orgUsers, setOrgUsers] = useState<OrganizationUserRow[] | null>(null)
+  const [orgUsersErr, setOrgUsersErr] = useState<string | null>(null)
+  const [orgUsersLoading, setOrgUsersLoading] = useState(false)
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserDisplayName, setNewUserDisplayName] = useState('')
+  const [newUserRole, setNewUserRole] = useState<string>('READ_ONLY')
+  const [newUserPassword, setNewUserPassword] = useState('demo123')
+  const [newUserSaving, setNewUserSaving] = useState(false)
+  const [newUserErr, setNewUserErr] = useState<string | null>(null)
+  const [editingUser, setEditingUser] = useState<OrganizationUserRow | null>(null)
+  const [editUserEmail, setEditUserEmail] = useState('')
+  const [editUserDisplayName, setEditUserDisplayName] = useState('')
+  const [editUserRole, setEditUserRole] = useState('')
+  const [editUserPassword, setEditUserPassword] = useState('')
+  const [editUserSaving, setEditUserSaving] = useState(false)
+  const [editUserErr, setEditUserErr] = useState<string | null>(null)
+  const [deleteUserErr, setDeleteUserErr] = useState<string | null>(null)
 
   const invoiceProfileCompleteness = (o: OrganizationRow) => {
     const p = o.settings?.invoiceProfile
-    if (!p) return { done: 0, total: 5 }
+    if (!p) return { done: 0, total: 7 }
     const fields = [
       p.legalName,
       p.taxNumber,
+      p.address,
+      p.phone,
+      p.email,
       p.bankDetails,
       p.paymentInstructions,
-      p.logoUrl,
     ]
     const done = fields.filter((v) => typeof v === 'string' && v.trim().length > 0).length
     return { done, total: fields.length }
@@ -873,18 +917,30 @@ export function OrganizationsPage() {
     const p = o.settings?.invoiceProfile
     setOrgProfileLegalName(p?.legalName ?? '')
     setOrgProfileTaxNumber(p?.taxNumber ?? '')
+    setOrgProfileAddress(p?.address ?? '')
+    setOrgProfilePhone(p?.phone ?? '')
+    setOrgProfileEmail(p?.email ?? '')
     setOrgProfileBankDetails(p?.bankDetails ?? '')
     setOrgProfilePaymentInstructions(p?.paymentInstructions ?? '')
     setOrgProfileLogoUrl(p?.logoUrl ?? '')
     const missing: Array<
-      'legalName' | 'taxNumber' | 'bankDetails' | 'paymentInstructions' | 'logoUrl'
+      | 'legalName'
+      | 'taxNumber'
+      | 'address'
+      | 'phone'
+      | 'email'
+      | 'bankDetails'
+      | 'paymentInstructions'
+      | 'logoUrl'
     > = []
     if (!(p?.legalName && p.legalName.trim())) missing.push('legalName')
     if (!(p?.taxNumber && p.taxNumber.trim())) missing.push('taxNumber')
+    if (!(p?.address && p.address.trim())) missing.push('address')
+    if (!(p?.phone && p.phone.trim())) missing.push('phone')
+    if (!(p?.email && p.email.trim())) missing.push('email')
     if (!(p?.bankDetails && p.bankDetails.trim())) missing.push('bankDetails')
     if (!(p?.paymentInstructions && p.paymentInstructions.trim()))
       missing.push('paymentInstructions')
-    if (!(p?.logoUrl && p.logoUrl.trim())) missing.push('logoUrl')
     setOrgProfileFocusField(missing[0] ?? 'legalName')
     setOrgProfileErr(null)
   }
@@ -902,6 +958,9 @@ export function OrganizationsPage() {
       body: JSON.stringify({
         invoiceLegalName: orgProfileLegalName,
         invoiceTaxNumber: orgProfileTaxNumber,
+        invoiceAddress: orgProfileAddress,
+        invoicePhone: orgProfilePhone,
+        invoiceEmail: orgProfileEmail,
         invoiceBankDetails: orgProfileBankDetails,
         invoicePaymentInstructions: orgProfilePaymentInstructions,
         invoiceLogoUrl: orgProfileLogoUrl,
@@ -920,6 +979,167 @@ export function OrganizationsPage() {
       })
       .catch((err: Error) => setOrgProfileErr(err.message))
       .finally(() => setOrgProfileSaving(false))
+  }
+
+  const isRoleManageable = useCallback(
+    (role: string): boolean => {
+      if (me?.role === 'SUPER_ADMIN') return role !== 'SUPER_ADMIN'
+      if (me?.role === 'ORG_ADMIN') return role !== 'SUPER_ADMIN' && role !== 'ORG_ADMIN'
+      return false
+    },
+    [me?.role],
+  )
+
+  const assignableRoles = useMemo(() => {
+    if (me?.role === 'SUPER_ADMIN') return USER_ROLES.filter((r) => r !== 'SUPER_ADMIN')
+    if (me?.role === 'ORG_ADMIN') return USER_ROLES.filter((r) => r !== 'SUPER_ADMIN' && r !== 'ORG_ADMIN')
+    return [] as readonly string[]
+  }, [me?.role])
+
+  useEffect(() => {
+    if (assignableRoles.length === 0) return
+    if (!assignableRoles.includes(newUserRole as (typeof USER_ROLES)[number])) {
+      setNewUserRole(assignableRoles[0])
+    }
+  }, [assignableRoles, newUserRole])
+
+  useEffect(() => {
+    if (!orgs || orgs.length === 0 || !canManageUsers) return
+    if (userOrgId && orgs.some((o) => o.id === userOrgId)) return
+    setUserOrgId(orgs[0].id)
+  }, [orgs, canManageUsers, userOrgId])
+
+  const reloadOrgUsers = useCallback(() => {
+    if (!token || !canManageUsers || !userOrgId) return
+    setOrgUsersLoading(true)
+    setOrgUsersErr(null)
+    fetch(`/api/v1/organizations/${userOrgId}/users`, { headers: authHeaders(token) })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<OrganizationUserRow[]>
+      })
+      .then((rows) => setOrgUsers(rows))
+      .catch((err: Error) => {
+        setOrgUsersErr(err.message)
+        setOrgUsers([])
+      })
+      .finally(() => setOrgUsersLoading(false))
+  }, [token, canManageUsers, userOrgId, signOut])
+
+  useEffect(() => {
+    reloadOrgUsers()
+  }, [reloadOrgUsers])
+
+  const submitCreateUser = (e: FormEvent) => {
+    e.preventDefault()
+    if (!token || !userOrgId || !canManageUsers) return
+    setNewUserErr(null)
+    if (!newUserEmail.trim()) {
+      setNewUserErr('Email is required.')
+      return
+    }
+    if (!newUserPassword.trim() || newUserPassword.trim().length < 6) {
+      setNewUserErr('Password must be at least 6 characters.')
+      return
+    }
+    setNewUserSaving(true)
+    fetch(`/api/v1/organizations/${userOrgId}/users`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(token),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: newUserEmail.trim().toLowerCase(),
+        displayName: newUserDisplayName.trim() || undefined,
+        role: newUserRole,
+        password: newUserPassword,
+      }),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+      })
+      .then(() => {
+        setNewUserEmail('')
+        setNewUserDisplayName('')
+        setNewUserRole(assignableRoles[0] ?? 'READ_ONLY')
+        setNewUserPassword('demo123')
+        reloadOrgUsers()
+        reloadOrganizations()
+      })
+      .catch((err: Error) => setNewUserErr(err.message))
+      .finally(() => setNewUserSaving(false))
+  }
+
+  const openEditUser = (u: OrganizationUserRow) => {
+    setEditingUser(u)
+    setEditUserEmail(u.email)
+    setEditUserDisplayName(u.displayName ?? '')
+    setEditUserRole(u.role)
+    setEditUserPassword('')
+    setEditUserErr(null)
+  }
+
+  const submitEditUser = () => {
+    if (!token || !canManageUsers || !userOrgId || !editingUser) return
+    setEditUserSaving(true)
+    setEditUserErr(null)
+    fetch(`/api/v1/organizations/${userOrgId}/users/${editingUser.id}`, {
+      method: 'PATCH',
+      headers: {
+        ...authHeaders(token),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: editUserEmail.trim().toLowerCase(),
+        displayName: editUserDisplayName.trim() || null,
+        role: editUserRole,
+        ...(editUserPassword.trim() ? { password: editUserPassword } : {}),
+      }),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+      })
+      .then(() => {
+        setEditingUser(null)
+        reloadOrgUsers()
+      })
+      .catch((err: Error) => setEditUserErr(err.message))
+      .finally(() => setEditUserSaving(false))
+  }
+
+  const removeUser = (u: OrganizationUserRow) => {
+    if (!token || !canManageUsers || !userOrgId) return
+    setDeleteUserErr(null)
+    if (!window.confirm(`Delete user ${u.email}?`)) return
+    fetch(`/api/v1/organizations/${userOrgId}/users/${u.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(token),
+    })
+      .then(async (r) => {
+        if (r.status === 401) {
+          signOut()
+          throw new Error('Session expired')
+        }
+        if (!r.ok) throw new Error(await readApiErrorMessage(r))
+      })
+      .then(() => {
+        reloadOrgUsers()
+        reloadOrganizations()
+      })
+      .catch((err: Error) => setDeleteUserErr(err.message))
   }
 
   return (
@@ -975,6 +1195,167 @@ export function OrganizationsPage() {
                 {createSaving ? 'Creating…' : 'Create organization'}
               </Button>
             </Box>
+          </SectionCard>
+        </Box>
+      )}
+      {canManageUsers && (
+        <Box sx={{ mb: 3 }}>
+          <SectionCard
+            title="User management"
+            subtitle="Create and manage users below your role in the selected organization."
+            icon={<PeopleOutlineOutlined />}
+          >
+            <Stack spacing={2}>
+              {isSuperAdmin && (
+                <FormControl size="small" sx={{ maxWidth: 360 }}>
+                  <InputLabel id="users-org-label">Organization</InputLabel>
+                  <Select
+                    labelId="users-org-label"
+                    label="Organization"
+                    value={userOrgId}
+                    onChange={(e) => setUserOrgId(e.target.value)}
+                  >
+                    {(orgs ?? []).map((o) => (
+                      <MenuItem key={o.id} value={o.id}>
+                        {o.name} ({o.slug})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+              {newUserErr ? (
+                <Alert severity="error" variant="outlined">
+                  {newUserErr}
+                </Alert>
+              ) : null}
+              {deleteUserErr ? (
+                <Alert severity="error" variant="outlined">
+                  {deleteUserErr}
+                </Alert>
+              ) : null}
+              <Stack
+                component="form"
+                onSubmit={submitCreateUser}
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={1.5}
+                useFlexGap
+                flexWrap="wrap"
+              >
+                <TextField
+                  size="small"
+                  label="Email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  sx={{ minWidth: 220 }}
+                />
+                <TextField
+                  size="small"
+                  label="Display name"
+                  value={newUserDisplayName}
+                  onChange={(e) => setNewUserDisplayName(e.target.value)}
+                  sx={{ minWidth: 220 }}
+                />
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel id="new-user-role-label">Role</InputLabel>
+                  <Select
+                    labelId="new-user-role-label"
+                    label="Role"
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value)}
+                  >
+                    {assignableRoles.map((r) => (
+                      <MenuItem key={r} value={r}>
+                        {r.replace(/_/g, ' ')}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small"
+                  label="Password"
+                  type="password"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  sx={{ minWidth: 180 }}
+                />
+                <Button type="submit" variant="contained" disabled={newUserSaving || !userOrgId}>
+                  {newUserSaving ? 'Creating…' : 'Create user'}
+                </Button>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                Security note: tenant users auto-created from the Tenants page have no default password.
+                Use Edit user to set a password and activate login.
+              </Typography>
+
+              {orgUsersErr ? (
+                <Alert severity="warning" variant="outlined">
+                  {orgUsersErr}
+                </Alert>
+              ) : null}
+              {orgUsers === null && orgUsersLoading ? (
+                <Stack spacing={1}>
+                  <Skeleton height={36} />
+                  <Skeleton height={36} />
+                </Stack>
+              ) : null}
+              {orgUsers && (
+                <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Email</TableCell>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Role</TableCell>
+                        <TableCell>Login</TableCell>
+                        <TableCell>Created</TableCell>
+                        <TableCell align="right">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {orgUsers.map((u) => {
+                        const canEdit = isRoleManageable(u.role) && u.id !== me?.id
+                        return (
+                          <TableRow key={u.id} hover>
+                            <TableCell>{u.email}</TableCell>
+                            <TableCell>{u.displayName ?? '—'}</TableCell>
+                            <TableCell sx={{ textTransform: 'capitalize' }}>
+                              {u.role.replace(/_/g, ' ')}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={u.hasPassword ? 'Active' : 'Pending password'}
+                                color={u.hasPassword ? 'success' : 'warning'}
+                              />
+                            </TableCell>
+                            <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                            <TableCell align="right">
+                              <IconButton
+                                size="small"
+                                aria-label="Edit user"
+                                disabled={!canEdit}
+                                onClick={() => openEditUser(u)}
+                              >
+                                <EditOutlined fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                aria-label="Delete user"
+                                disabled={!canEdit}
+                                onClick={() => removeUser(u)}
+                              >
+                                <DeleteOutlineOutlined fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Stack>
           </SectionCard>
         </Box>
       )}
@@ -1075,7 +1456,7 @@ export function OrganizationsPage() {
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Organization invoice profile</DialogTitle>
+        <DialogTitle>Organization tax invoice profile (Zambia / ZRA)</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {orgProfileErr ? (
@@ -1083,6 +1464,10 @@ export function OrganizationsPage() {
                 {orgProfileErr}
               </Alert>
             ) : null}
+            <Alert severity="info" variant="outlined">
+              Complete supplier details for ZRA-compliant tax invoices (TPIN, address, and payment
+              details appear on every PDF).
+            </Alert>
             <TextField
               size="small"
               label="Legal entity name"
@@ -1093,10 +1478,39 @@ export function OrganizationsPage() {
             />
             <TextField
               size="small"
-              label="Tax / VAT number"
+              label="TPIN (ZRA Tax Payer ID)"
               value={orgProfileTaxNumber}
               onChange={(e) => setOrgProfileTaxNumber(e.target.value)}
               autoFocus={orgProfileFocusField === 'taxNumber'}
+              fullWidth
+              placeholder="e.g. 1001234567"
+            />
+            <TextField
+              size="small"
+              label="Registered address"
+              value={orgProfileAddress}
+              onChange={(e) => setOrgProfileAddress(e.target.value)}
+              autoFocus={orgProfileFocusField === 'address'}
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Plot, street, city, province"
+            />
+            <TextField
+              size="small"
+              label="Phone"
+              value={orgProfilePhone}
+              onChange={(e) => setOrgProfilePhone(e.target.value)}
+              autoFocus={orgProfileFocusField === 'phone'}
+              fullWidth
+              placeholder="+260 …"
+            />
+            <TextField
+              size="small"
+              label="Email"
+              value={orgProfileEmail}
+              onChange={(e) => setOrgProfileEmail(e.target.value)}
+              autoFocus={orgProfileFocusField === 'email'}
               fullWidth
             />
             <TextField
@@ -1142,6 +1556,70 @@ export function OrganizationsPage() {
             disabled={orgProfileSaving}
           >
             {orgProfileSaving ? 'Saving…' : 'Save profile'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editingUser !== null}
+        onClose={() => !editUserSaving && setEditingUser(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Edit user</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {editUserErr ? (
+              <Alert severity="error" variant="outlined">
+                {editUserErr}
+              </Alert>
+            ) : null}
+            <TextField
+              size="small"
+              label="Email"
+              value={editUserEmail}
+              onChange={(e) => setEditUserEmail(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              size="small"
+              label="Display name"
+              value={editUserDisplayName}
+              onChange={(e) => setEditUserDisplayName(e.target.value)}
+              fullWidth
+            />
+            <FormControl size="small" fullWidth>
+              <InputLabel id="edit-org-user-role-label">Role</InputLabel>
+              <Select
+                labelId="edit-org-user-role-label"
+                label="Role"
+                value={editUserRole}
+                onChange={(e) => setEditUserRole(e.target.value)}
+              >
+                {assignableRoles.map((r) => (
+                  <MenuItem key={r} value={r}>
+                    {r.replace(/_/g, ' ')}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              label="New password (optional)"
+              type="password"
+              value={editUserPassword}
+              onChange={(e) => setEditUserPassword(e.target.value)}
+              fullWidth
+              helperText="Leave empty to keep existing password."
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingUser(null)} disabled={editUserSaving}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={submitEditUser} disabled={editUserSaving}>
+            {editUserSaving ? 'Saving…' : 'Save user'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -3238,10 +3716,6 @@ export function BillingSchedulesPage() {
     }
   }, [token, billingLeaseId, listNonce, handleUnauthorized])
 
-  useEffect(() => {
-    setScheduleVisibilityFilter('all')
-  }, [billingLeaseId])
-
   const [createOpen, setCreateOpen] = useState(false)
   const [createKind, setCreateKind] = useState<(typeof CHARGE_SCHEDULE_KINDS)[number]>('RENT')
   const [createLabel, setCreateLabel] = useState('')
@@ -3276,6 +3750,11 @@ export function BillingSchedulesPage() {
 
   const [scheduleVisibilityFilter, setScheduleVisibilityFilter] =
     useState<ChargeScheduleVisibility>('all')
+
+  useEffect(() => {
+    setScheduleVisibilityFilter('all')
+  }, [billingLeaseId])
+
   const [scheduleDragId, setScheduleDragId] = useState<string | null>(null)
   const [scheduleDragOverId, setScheduleDragOverId] = useState<string | null>(null)
   const [createDialogMode, setCreateDialogMode] = useState<'new' | 'duplicate'>('new')
@@ -4619,7 +5098,7 @@ export function BillingInvoiceDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [draftEditMode, inv?.leaseId, inv?.status, token, handleUnauthorized])
+  }, [draftEditMode, inv, token, handleUnauthorized])
 
   const reloadDetail = useCallback(() => {
     if (!token || !invoiceId) return Promise.resolve()
@@ -4871,16 +5350,10 @@ export function BillingInvoiceDetailPage() {
           handleUnauthorized()
           throw new Error('Session expired')
         }
-        if (!r.ok) throw new Error(await readApiErrorMessage(r))
-        return r.blob()
-      })
-      .then((blob) => {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `sofinda-invoice-${invoiceId.slice(0, 8)}.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
+        await downloadPdfFromResponse(
+          r,
+          `tax-invoice-${invoiceId.slice(0, 8).toUpperCase()}.pdf`,
+        )
       })
       .catch((e: Error) => setBillingActionErr(e.message))
   }, [token, invoiceId, handleUnauthorized, setBillingActionErr])

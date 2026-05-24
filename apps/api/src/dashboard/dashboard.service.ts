@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InvoiceStatus, LedgerSource, UserRole } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { PortalService } from '../portal/portal.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly portal: PortalService,
+  ) {}
 
   metrics(actor: JwtAccessPayload) {
     const orgFilter =
@@ -117,7 +121,9 @@ export class DashboardService {
       );
       const netRecovered = Math.max(0, paymentsAmount - reversalAmount);
       const recoveryEfficiency =
-        paymentsAmount > 0 ? Math.max(0, 1 - reversalAmount / paymentsAmount) : 1;
+        paymentsAmount > 0
+          ? Math.max(0, 1 - reversalAmount / paymentsAmount)
+          : 1;
       const collectionScore =
         (tenantHonestyRate ?? 0.5) * 70 + recoveryEfficiency * 30;
 
@@ -148,7 +154,12 @@ export class DashboardService {
           createdAt: { gte: firstTrendMonth, lt: trendEndExclusive },
           source: { in: [LedgerSource.PAYMENT, LedgerSource.ADJUSTMENT] },
         },
-        select: { narrative: true, createdAt: true, signedAmount: true, source: true },
+        select: {
+          narrative: true,
+          createdAt: true,
+          signedAmount: true,
+          source: true,
+        },
       });
       const allInvoiceLedger = await tx.ledgerEntry.findMany({
         where: {
@@ -204,7 +215,10 @@ export class DashboardService {
           (s, r) => s + Math.abs(Number(r.signedAmount)),
           0,
         );
-        const monthNetRecovered = Math.max(0, monthPaymentsAmount - monthReversalAmount);
+        const monthNetRecovered = Math.max(
+          0,
+          monthPaymentsAmount - monthReversalAmount,
+        );
         const monthRecoveryEff =
           monthPaymentsAmount > 0
             ? Math.max(0, 1 - monthReversalAmount / monthPaymentsAmount)
@@ -266,6 +280,14 @@ export class DashboardService {
       });
       return { organizationId: orgId, users };
     });
+  }
+
+  tenantPortal(actor: JwtAccessPayload) {
+    return this.portal.tenantSnapshot(actor);
+  }
+
+  ownerPortal(actor: JwtAccessPayload) {
+    return this.portal.ownerSnapshot(actor);
   }
 
   performance(actor: JwtAccessPayload) {
@@ -379,7 +401,10 @@ export class DashboardService {
         if (!invId || !invoiceDueAt.has(invId)) continue;
         const dueAt = invoiceDueAt.get(invId)!;
         if (row.createdAt > dueAt) continue;
-        paidByDue.set(invId, (paidByDue.get(invId) ?? 0) + -Number(row.signedAmount));
+        paidByDue.set(
+          invId,
+          (paidByDue.get(invId) ?? 0) + -Number(row.signedAmount),
+        );
       }
 
       type TenantAcc = {

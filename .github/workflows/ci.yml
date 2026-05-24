@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sofinda
+          POSTGRES_PASSWORD: sofinda
+          POSTGRES_DB: sofinda
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sofinda -d sofinda"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://sofinda:sofinda@localhost:5432/sofinda
+      JWT_SECRET: ci-test-jwt-secret-do-not-use-in-production-min-32b
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate -w api
+
+      - name: Apply migrations
+        run: npm run prisma:migrate -w api
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test -w api
+
+      - name: E2E tests (with DB)
+        run: npm run test:e2e:db -w api
