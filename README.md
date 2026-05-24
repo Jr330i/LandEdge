@@ -20,6 +20,11 @@ npm install
 cp apps/api/.env.example apps/api/.env
 docker compose up -d
 cd apps/api && npx prisma migrate deploy && npx prisma db seed && cd ../..
+
+
+docker compose up -d
+npm run dev:web
+npm run dev:api
 ```
 
 Database URL defaults to local Docker Postgres (`docker-compose.yml`).
@@ -53,6 +58,8 @@ Admin UI (JWT): organizations, **portfolios** (list/create with org picker for *
 
 - `super@demo.sofinda.local` — `SUPER_ADMIN`
 - `admin@demo.sofinda.local` — `ORG_ADMIN`
+- `tenant@demo.sofinda.local` — `TENANT_USER` (linked to demo tenant; portal at `/portal/tenant`)
+- `owner@demo.sofinda.local` — `OWNER_USER` (portal at `/portal/owner`)
 
 ### Tests
 
@@ -67,6 +74,26 @@ npm run test:e2e:db -w api    # full API e2e incl. organizations (Postgres up + 
 ```bash
 npm run build
 ```
+
+## Production (Docker)
+
+Local infra only (Postgres + Redis):
+
+```bash
+docker compose up -d
+```
+
+Full stack (Postgres + API + web with nginx `/api` proxy):
+
+```bash
+cp apps/api/.env.example apps/api/.env   # set JWT_SECRET (and SMTP if needed)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+```
+
+- Web UI: `http://localhost:8080`
+- API health: `http://localhost:3000/api/v1/health`
+
+Set `CORS_ORIGINS` on the API when the browser talks to the API directly (without nginx proxy).
 
 ## Row-level security (Postgres)
 

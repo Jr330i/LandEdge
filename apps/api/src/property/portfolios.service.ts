@@ -19,7 +19,9 @@ export class PortfoliosService {
   ): string {
     if (dto.organizationId) {
       if (actor.role !== UserRole.SUPER_ADMIN) {
-        throw new ForbiddenException('organizationId is restricted to SUPER_ADMIN');
+        throw new ForbiddenException(
+          'organizationId is restricted to SUPER_ADMIN',
+        );
       }
       return dto.organizationId;
     }

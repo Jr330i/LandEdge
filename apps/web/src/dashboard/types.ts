@@ -99,11 +99,84 @@ export type ProfileMetrics = {
   }[]
 }
 
+export type TenantPortalSnapshot = {
+  linkedTenant: boolean
+  tenant: {
+    id: string
+    legalName: string
+    tradingName: string | null
+    contactEmail: string | null
+    contactPhone: string | null
+  } | null
+  leaseSummary: {
+    activeLeases: number
+    expiringLeases: number
+    totalLeases: number
+  }
+  statement: {
+    balance: number
+    invoiceCount: number
+    ledgerCount: number
+  }
+  recentInvoices: {
+    id: string
+    status: string
+    periodStart: string
+    periodEnd: string
+    dueDate: string | null
+    currency: string
+    totalAmount: number
+  }[]
+  recentLedger: {
+    id: string
+    narrative: string
+    signedAmount: number
+    currency: string
+    source: string
+    createdAt: string
+  }[]
+}
+
+export type OwnerPortalSnapshot = {
+  organization: {
+    id: string
+    name: string
+    slug: string
+  }
+  properties: {
+    portfolios: number
+    buildings: number
+    units: number
+  }
+  occupancy: {
+    activeLeases: number
+    expiringLeases: number
+    totalLeases: number
+  }
+  finance: {
+    issuedInvoices: number
+    draftInvoices: number
+    ledgerBalance: number
+  }
+  recentInvoices: {
+    id: string
+    status: string
+    periodStart: string
+    periodEnd: string
+    currency: string
+    totalAmount: number
+    tenantName?: string
+  }[]
+}
+
 export type LoginUser = {
   id: string
   email: string
   role: string
   displayName: string | null
+  organizationId: string
+  organizationName?: string
+  organizationSlug?: string
 }
 
 export type OrganizationRow = {
@@ -116,6 +189,9 @@ export type OrganizationRow = {
     invoiceProfile?: {
       legalName?: string | null
       taxNumber?: string | null
+      address?: string | null
+      phone?: string | null
+      email?: string | null
       bankDetails?: string | null
       paymentInstructions?: string | null
       logoUrl?: string | null
@@ -123,6 +199,16 @@ export type OrganizationRow = {
   } | null
   createdAt: string
   _count: { users: number }
+}
+
+export type OrganizationUserRow = {
+  id: string
+  email: string
+  displayName: string | null
+  role: string
+  hasPassword: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 export type PortfolioRow = {
@@ -316,6 +402,16 @@ export const BILLING_WRITE_ROLES = new Set([
   'SUPER_ADMIN',
   'ORG_ADMIN',
   'FINANCE',
+])
+
+/** Internal back-office roles with admin console API access. */
+export const CONSOLE_ACCESS_ROLES = new Set([
+  'SUPER_ADMIN',
+  'ORG_ADMIN',
+  'PORTFOLIO_MANAGER',
+  'FINANCE',
+  'FACILITIES_MANAGER',
+  'READ_ONLY',
 ])
 
 /** Matches `GET /dashboard/performance` on the API */

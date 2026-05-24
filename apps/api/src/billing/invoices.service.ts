@@ -4,12 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import nodemailer from 'nodemailer';
-import {
-  InvoiceStatus,
-  LedgerSource,
-  Prisma,
-  UserRole,
-} from '@prisma/client';
+import { InvoiceStatus, LedgerSource, Prisma, UserRole } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -18,7 +13,11 @@ import { AllocateInvoicePaymentDto } from './dto/allocate-invoice-payment.dto';
 import { ReverseInvoicePaymentDto } from './dto/reverse-invoice-payment.dto';
 import { SendInvoiceEmailDto } from './dto/send-invoice-email.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
-import { renderInvoicePdf } from './invoice-pdf.builder';
+import {
+  assertValidPdfBuffer,
+  invoicePdfFilename,
+  renderInvoicePdf,
+} from './invoice-pdf.builder';
 
 function csvEscape(s: string): string {
   if (/[",\n\r]/.test(s)) {
@@ -364,27 +363,37 @@ export class InvoicesService {
     });
   }
 
-  buildPdf(id: string, actor: JwtAccessPayload): Promise<Buffer> {
-    return this.prisma.withUserRls(actor, async (tx) => {
-      const row = await tx.invoice.findUnique({
+  async buildPdf(id: string, actor: JwtAccessPayload): Promise<Buffer> {
+    const row = await this.prisma.withUserRls(actor, async (tx) => {
+      const found = await tx.invoice.findUnique({
         where: { id },
         include: {
           lines: { orderBy: { createdAt: 'asc' } },
-          tenant: { select: { legalName: true, tradingName: true } },
-          organization: { select: { name: true, settings: true } },
+          tenant: {
+            select: {
+              legalName: true,
+              tradingName: true,
+              contactEmail: true,
+              contactPhone: true,
+            },
+          },
+          organization: { select: { name: true, slug: true, settings: true } },
         },
       });
-      if (!row) {
+      if (!found) {
         throw new NotFoundException('Invoice not found');
       }
       if (
         actor.role !== UserRole.SUPER_ADMIN &&
-        row.organizationId !== actor.organizationId
+        found.organizationId !== actor.organizationId
       ) {
         throw new NotFoundException('Invoice not found');
       }
-      return renderInvoicePdf(row);
+      return found;
     });
+    const buffer = await renderInvoicePdf(row);
+    assertValidPdfBuffer(buffer);
+    return buffer;
   }
 
   listPayments(id: string, actor: JwtAccessPayload) {
@@ -435,9 +444,7 @@ export class InvoicesService {
         }
       >();
       for (const r of reversals) {
-        const m = r.narrative.match(
-          /REV:([0-9a-f-]{36})(?:\s+([\s\S]*))?$/i,
-        );
+        const m = r.narrative.match(/REV:([0-9a-f-]{36})(?:\s+([\s\S]*))?$/i);
         const paymentId = m?.[1];
         if (!paymentId) continue;
         reversedByPaymentId.set(paymentId, {
@@ -473,7 +480,9 @@ export class InvoicesService {
         throw new NotFoundException('Invoice not found');
       }
       if (inv.status !== InvoiceStatus.ISSUED) {
-        throw new BadRequestException('Only issued invoices can receive payments');
+        throw new BadRequestException(
+          'Only issued invoices can receive payments',
+        );
       }
 
       const narrative = `${tag} ${dto.narrative?.trim() || 'Payment allocation'}`;
@@ -485,6 +494,34 @@ export class InvoicesService {
           invoiceId: null,
           narrative,
           signedAmount: new Prisma.Decimal(String(-Math.abs(dto.amount))),
+          currency: inv.currency,
+          source: LedgerSource.PAYMENT,
+        },
+      });
+    });
+  }
+
+  allocatePaymentSystem(id: string, amount: number, narrative?: string) {
+    const tag = this.paymentTag(id);
+    return this.prisma.withLoginRls(async (tx) => {
+      const inv = await tx.invoice.findUnique({ where: { id } });
+      if (!inv) {
+        throw new NotFoundException('Invoice not found');
+      }
+      if (inv.status !== InvoiceStatus.ISSUED) {
+        throw new BadRequestException(
+          'Only issued invoices can receive payments',
+        );
+      }
+      const text = `${tag} ${narrative?.trim() || 'Payment gateway allocation'}`;
+      return tx.ledgerEntry.create({
+        data: {
+          organizationId: inv.organizationId,
+          leaseId: inv.leaseId,
+          tenantId: inv.tenantId,
+          invoiceId: null,
+          narrative: text,
+          signedAmount: new Prisma.Decimal(String(-Math.abs(amount))),
           currency: inv.currency,
           source: LedgerSource.PAYMENT,
         },
@@ -509,7 +546,9 @@ export class InvoicesService {
       ) {
         throw new NotFoundException('Invoice not found');
       }
-      const payment = await tx.ledgerEntry.findUnique({ where: { id: paymentId } });
+      const payment = await tx.ledgerEntry.findUnique({
+        where: { id: paymentId },
+      });
       if (!payment || payment.source !== LedgerSource.PAYMENT) {
         throw new NotFoundException('Payment not found');
       }
@@ -517,7 +556,9 @@ export class InvoicesService {
         payment.leaseId !== inv.leaseId ||
         !payment.narrative.toUpperCase().includes(tag.toUpperCase())
       ) {
-        throw new BadRequestException('Payment does not belong to this invoice');
+        throw new BadRequestException(
+          'Payment does not belong to this invoice',
+        );
       }
       const existingReverse = await tx.ledgerEntry.findFirst({
         where: {
@@ -569,9 +610,14 @@ export class InvoicesService {
         include: {
           lines: { orderBy: { createdAt: 'asc' } },
           tenant: {
-            select: { legalName: true, tradingName: true, contactEmail: true },
+            select: {
+              legalName: true,
+              tradingName: true,
+              contactEmail: true,
+              contactPhone: true,
+            },
           },
-          organization: { select: { name: true, settings: true } },
+          organization: { select: { name: true, slug: true, settings: true } },
         },
       });
       if (!found) throw new NotFoundException('Invoice not found');
@@ -599,6 +645,7 @@ export class InvoicesService {
       dto.message?.trim() ||
       `Hi ${tenantLabel},\n\nPlease find your invoice attached.\n\nRegards,\n${row.organization.name}`;
     const pdf = await renderInvoicePdf(row);
+    assertValidPdfBuffer(pdf);
 
     const transport = nodemailer.createTransport({
       host,
@@ -613,7 +660,7 @@ export class InvoicesService {
       text: message,
       attachments: [
         {
-          filename: `sofinda-invoice-${id.slice(0, 8)}.pdf`,
+          filename: invoicePdfFilename(id),
           content: pdf,
           contentType: 'application/pdf',
         },
@@ -629,7 +676,9 @@ export class InvoicesService {
     const periodStart = new Date(dto.periodStart);
     const periodEnd = new Date(dto.periodEnd);
     if (periodEnd < periodStart) {
-      throw new BadRequestException('periodEnd must be on or after periodStart');
+      throw new BadRequestException(
+        'periodEnd must be on or after periodStart',
+      );
     }
 
     return this.prisma.withUserRls(actor, async (tx) => {
@@ -700,7 +749,9 @@ export class InvoicesService {
     const periodStart = new Date(dto.periodStart);
     const periodEnd = new Date(dto.periodEnd);
     if (periodEnd < periodStart) {
-      throw new BadRequestException('periodEnd must be on or after periodStart');
+      throw new BadRequestException(
+        'periodEnd must be on or after periodStart',
+      );
     }
 
     return this.prisma.withUserRls(actor, async (tx) => {
@@ -752,11 +803,7 @@ export class InvoicesService {
           startDate: { lte: periodEnd },
           OR: [{ endDate: null }, { endDate: { gte: periodStart } }],
         },
-        orderBy: [
-          { sortOrder: 'asc' },
-          { kind: 'asc' },
-          { startDate: 'asc' },
-        ],
+        orderBy: [{ sortOrder: 'asc' }, { kind: 'asc' }, { startDate: 'asc' }],
       });
 
       if (!schedules.length) {
@@ -789,7 +836,9 @@ export class InvoicesService {
         new Prisma.Decimal(0),
       );
       if (total.lte(0)) {
-        throw new BadRequestException('Generated invoice total must be positive');
+        throw new BadRequestException(
+          'Generated invoice total must be positive',
+        );
       }
 
       return tx.invoice.create({
@@ -846,7 +895,9 @@ export class InvoicesService {
       const periodEnd =
         dto.periodEnd !== undefined ? new Date(dto.periodEnd) : inv.periodEnd;
       if (periodEnd < periodStart) {
-        throw new BadRequestException('periodEnd must be on or after periodStart');
+        throw new BadRequestException(
+          'periodEnd must be on or after periodStart',
+        );
       }
 
       let lineCreates: {
@@ -857,7 +908,9 @@ export class InvoicesService {
 
       if (dto.lines !== undefined) {
         if (!dto.lines.length) {
-          throw new BadRequestException('At least one invoice line is required');
+          throw new BadRequestException(
+            'At least one invoice line is required',
+          );
         }
         for (const line of dto.lines) {
           if (line.chargeScheduleId) {

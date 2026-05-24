@@ -69,7 +69,8 @@ export class LeasesService {
                   },
                 },
               },
-              ...(maybeStatus && Object.values(LeaseStatus).includes(maybeStatus)
+              ...(maybeStatus &&
+              Object.values(LeaseStatus).includes(maybeStatus)
                 ? [{ status: maybeStatus }]
                 : []),
             ],
@@ -82,11 +83,15 @@ export class LeasesService {
           where,
           orderBy: { startDate: 'desc' },
           include: {
-            tenant: { select: { id: true, legalName: true, tradingName: true } },
+            tenant: {
+              select: { id: true, legalName: true, tradingName: true },
+            },
             brokerUser: {
               select: { id: true, email: true, displayName: true },
             },
-            leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
+            leaseUnits: {
+              include: { unit: { select: { id: true, code: true } } },
+            },
           },
         });
       }
@@ -95,11 +100,15 @@ export class LeasesService {
           where,
           orderBy: { startDate: 'desc' },
           include: {
-            tenant: { select: { id: true, legalName: true, tradingName: true } },
+            tenant: {
+              select: { id: true, legalName: true, tradingName: true },
+            },
             brokerUser: {
               select: { id: true, email: true, displayName: true },
             },
-            leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
+            leaseUnits: {
+              include: { unit: { select: { id: true, code: true } } },
+            },
           },
           skip: (pageResolved - 1) * pageSizeResolved,
           take: pageSizeResolved,
@@ -208,7 +217,9 @@ export class LeasesService {
           brokerUser: {
             select: { id: true, email: true, displayName: true },
           },
-          leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
+          leaseUnits: {
+            include: { unit: { select: { id: true, code: true } } },
+          },
         },
       });
 
@@ -306,7 +317,9 @@ export class LeasesService {
           brokerUser: {
             select: { id: true, email: true, displayName: true },
           },
-          leaseUnits: { include: { unit: { select: { id: true, code: true } } } },
+          leaseUnits: {
+            include: { unit: { select: { id: true, code: true } } },
+          },
         },
       });
 
@@ -360,7 +373,9 @@ export class LeasesService {
       include: {
         floor: {
           include: {
-            building: { include: { portfolio: { select: { organizationId: true } } } },
+            building: {
+              include: { portfolio: { select: { organizationId: true } } },
+            },
           },
         },
       },
@@ -383,10 +398,7 @@ export class LeasesService {
     status: LeaseStatus,
     excludeLeaseId: string | undefined,
   ) {
-    if (
-      status === LeaseStatus.DRAFT ||
-      status === LeaseStatus.TERMINATED
-    ) {
+    if (status === LeaseStatus.DRAFT || status === LeaseStatus.TERMINATED) {
       return;
     }
     if (!unitIds.length) {

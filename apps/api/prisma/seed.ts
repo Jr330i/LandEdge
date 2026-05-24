@@ -1,5 +1,6 @@
 import {
   InvoiceStatus,
+  LedgerSource,
   Prisma,
   PrismaClient,
 } from '@prisma/client';
@@ -55,6 +56,40 @@ async function main() {
         passwordHash,
         displayName: 'Platform Super Admin',
         role: 'SUPER_ADMIN',
+      },
+      update: { passwordHash },
+    });
+
+    await tx.user.upsert({
+      where: {
+        organizationId_email: {
+          organizationId: org.id,
+          email: 'tenant@demo.sofinda.local',
+        },
+      },
+      create: {
+        organizationId: org.id,
+        email: 'tenant@demo.sofinda.local',
+        passwordHash,
+        displayName: 'Demo Tenant User',
+        role: 'TENANT_USER',
+      },
+      update: { passwordHash },
+    });
+
+    await tx.user.upsert({
+      where: {
+        organizationId_email: {
+          organizationId: org.id,
+          email: 'owner@demo.sofinda.local',
+        },
+      },
+      create: {
+        organizationId: org.id,
+        email: 'owner@demo.sofinda.local',
+        passwordHash,
+        displayName: 'Demo Property Owner',
+        role: 'OWNER_USER',
       },
       update: { passwordHash },
     });
@@ -197,6 +232,81 @@ async function main() {
               },
             ],
           },
+        },
+      });
+    }
+
+    let issuedInv = await tx.invoice.findFirst({
+      where: {
+        leaseId: lease.id,
+        status: InvoiceStatus.ISSUED,
+        periodStart: new Date('2026-02-01'),
+      },
+      include: { ledgerEntry: true, lines: true },
+    });
+    if (!issuedInv) {
+      issuedInv = await tx.invoice.create({
+        data: {
+          organizationId: org.id,
+          leaseId: lease.id,
+          tenantId: tenant.id,
+          status: InvoiceStatus.ISSUED,
+          periodStart: new Date('2026-02-01'),
+          periodEnd: new Date('2026-02-28'),
+          dueDate: new Date('2026-03-07'),
+          currency: 'ZAR',
+          notes: 'Demo issued invoice — visible in tenant portal',
+          lines: {
+            create: [
+              {
+                description: 'Rent — February (demo)',
+                amount: new Prisma.Decimal('15000.00'),
+                chargeScheduleId: rentSchedule.id,
+              },
+            ],
+          },
+        },
+        include: { ledgerEntry: true, lines: true },
+      });
+    }
+    if (!issuedInv.ledgerEntry) {
+      const total = issuedInv.lines.reduce(
+        (acc, l) => acc.add(l.amount),
+        new Prisma.Decimal(0),
+      );
+      await tx.ledgerEntry.create({
+        data: {
+          organizationId: org.id,
+          leaseId: lease.id,
+          tenantId: tenant.id,
+          invoiceId: issuedInv.id,
+          narrative: `Invoice ${issuedInv.id.slice(0, 8)}… (2026-02-01–2026-02-28)`,
+          signedAmount: total,
+          currency: 'ZAR',
+          source: LedgerSource.INVOICE,
+        },
+      });
+    }
+
+    const paymentExists = await tx.ledgerEntry.findFirst({
+      where: {
+        organizationId: org.id,
+        tenantId: tenant.id,
+        source: LedgerSource.PAYMENT,
+        narrative: { contains: 'Demo partial payment' },
+      },
+    });
+    if (!paymentExists) {
+      await tx.ledgerEntry.create({
+        data: {
+          organizationId: org.id,
+          leaseId: lease.id,
+          tenantId: tenant.id,
+          invoiceId: null,
+          narrative: 'Demo partial payment — February rent',
+          signedAmount: new Prisma.Decimal('-5000.00'),
+          currency: 'ZAR',
+          source: LedgerSource.PAYMENT,
         },
       });
     }

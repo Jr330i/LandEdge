@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { BILLING_WRITE_ROLES } from './billing.constants';
@@ -27,6 +28,8 @@ import { LedgerService } from './ledger.service';
 @ApiTags('billing — ledger')
 @ApiBearerAuth()
 @Controller('billing/ledger')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class LedgerController {
   constructor(private readonly service: LedgerService) {}
 

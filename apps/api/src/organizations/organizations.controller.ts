@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -18,15 +19,20 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { CreateOrganizationUserDto } from './dto/create-organization-user.dto';
 import { UpdateOrganizationInvoiceProfileDto } from './dto/update-organization-invoice-profile.dto';
+import { UpdateOrganizationUserDto } from './dto/update-organization-user.dto';
 import { OrganizationsService } from './organizations.service';
 
 @ApiTags('organizations')
 @ApiBearerAuth()
 @Controller('organizations')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 
@@ -67,7 +73,8 @@ export class OrganizationsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
   @ApiOperation({
-    summary: 'Update organization invoice profile (SUPER_ADMIN or own ORG_ADMIN)',
+    summary:
+      'Update organization invoice profile (SUPER_ADMIN or own ORG_ADMIN)',
   })
   updateInvoiceProfile(
     @Param('id', ParseUUIDPipe) id: string,
@@ -75,5 +82,61 @@ export class OrganizationsController {
     @CurrentUser() user: JwtAccessPayload,
   ) {
     return this.organizationsService.updateInvoiceProfile(id, dto, user);
+  }
+
+  @Get(':id/users')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @ApiOperation({
+    summary: 'List users in organization (SUPER_ADMIN / ORG_ADMIN)',
+  })
+  listUsers(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.organizationsService.listUsers(id, user);
+  }
+
+  @Post(':id/users')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @ApiOperation({
+    summary: 'Create user in organization (hierarchy-enforced)',
+  })
+  createUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateOrganizationUserDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.organizationsService.createUser(id, dto, user);
+  }
+
+  @Patch(':id/users/:userId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @ApiOperation({
+    summary: 'Update user in organization (hierarchy-enforced)',
+  })
+  updateUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: UpdateOrganizationUserDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.organizationsService.updateUser(id, userId, dto, user);
+  }
+
+  @Delete(':id/users/:userId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @ApiOperation({
+    summary: 'Delete user in organization (hierarchy-enforced)',
+  })
+  removeUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.organizationsService.removeUser(id, userId, user);
   }
 }

@@ -8,11 +8,29 @@ export class UpdateOrganizationInvoiceProfileDto {
   @MaxLength(200)
   invoiceLegalName?: string;
 
-  @ApiPropertyOptional({ example: 'ZA1234567890' })
+  @ApiPropertyOptional({ example: '1001234567', description: 'ZRA TPIN' })
   @IsOptional()
   @IsString()
   @MaxLength(64)
   invoiceTaxNumber?: string;
+
+  @ApiPropertyOptional({ example: 'Plot 123, Cairo Road, Lusaka, Zambia' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  invoiceAddress?: string;
+
+  @ApiPropertyOptional({ example: '+260 211 123456' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  invoicePhone?: string;
+
+  @ApiPropertyOptional({ example: 'accounts@example.co.zm' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(320)
+  invoiceEmail?: string;
 
   @ApiPropertyOptional({ example: 'Acme Bank, Account 123456, Branch 250655' })
   @IsOptional()

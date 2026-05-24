@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CreateLeaseDto } from './dto/create-lease.dto';
@@ -31,6 +32,8 @@ import { LeasesService } from './leases.service';
 @ApiTags('leases')
 @ApiBearerAuth()
 @Controller('leases')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class LeasesController {
   constructor(private readonly leasesService: LeasesService) {}
 
@@ -63,12 +66,11 @@ export class LeasesController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(...LEASE_WRITE_ROLES)
-  @ApiOperation({ summary: 'Create lease with unit links (FR-007 one-to-many)' })
+  @ApiOperation({
+    summary: 'Create lease with unit links (FR-007 one-to-many)',
+  })
   @ApiCreatedResponse()
-  create(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: CreateLeaseDto,
-  ) {
+  create(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateLeaseDto) {
     return this.leasesService.create(user, dto);
   }
 

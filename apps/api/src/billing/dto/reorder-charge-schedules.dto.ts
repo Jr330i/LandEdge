@@ -6,7 +6,10 @@ export class ReorderChargeSchedulesDto {
   @IsUUID('4')
   leaseId!: string;
 
-  @ApiProperty({ type: [String], description: 'All schedule ids for the lease, in order' })
+  @ApiProperty({
+    type: [String],
+    description: 'All schedule ids for the lease, in order',
+  })
   @IsArray()
   @IsUUID('4', { each: true })
   chargeScheduleIds!: string[];

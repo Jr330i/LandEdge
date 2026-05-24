@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { CONSOLE_ACCESS_ROLES } from '../auth/role-matrix.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PROPERTY_WRITE_ROLES } from './property.constants';
@@ -31,6 +32,8 @@ import { FloorsService } from './floors.service';
 @ApiTags('floors')
 @ApiBearerAuth()
 @Controller('floors')
+@UseGuards(RolesGuard)
+@Roles(...CONSOLE_ACCESS_ROLES)
 export class FloorsController {
   constructor(private readonly floorsService: FloorsService) {}
 
@@ -69,10 +72,7 @@ export class FloorsController {
   @Roles(...PROPERTY_WRITE_ROLES)
   @ApiOperation({ summary: 'Create floor' })
   @ApiCreatedResponse({ description: 'Floor created' })
-  create(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: CreateFloorDto,
-  ) {
+  create(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateFloorDto) {
     return this.floorsService.create(user, dto);
   }
 

@@ -2,6 +2,10 @@
 
 Short list of intentional gaps / next steps. Revisit when planning sprints.
 
+## Role permissions baseline
+
+- **Done:** Admin console baseline role matrix implemented and documented in `docs/ROLE_MATRIX.md` (API class-level console access, endpoint-level write roles, performance-view scope, frontend route/nav gating alignment).
+
 ## Lease unit cascade — polish
 
 - **Done:** Multi-floor / multi-building selection; orphan menu labels **other floor** vs **other building** (via `GET /units?floorId=` including `floor.buildingId`).
@@ -30,6 +34,20 @@ Short list of intentional gaps / next steps. Revisit when planning sprints.
 - **Done:** **Ledger** page: `GET /billing/ledger` supports `q`, `source`, `leaseId`, `tenantId`, `createdFrom`, `createdTo`, `page`, `pageSize` (paged shape when any of those extras are set). **CSV export** uses the same filters. **Manual entry** dialog (`POST /billing/ledger/manual`) for **PAYMENT** / **ADJUSTMENT**. Table refetch via local list nonce. Deep link `?leaseId=` pre-fills the lease filter.
 - **Done:** **Invoice PDF + send email:** `GET /billing/invoices/:id/pdf` (pdfkit; org name, tenant, lines, total, notes) + `POST /billing/invoices/:id/send-email` (SMTP) and invoice detail actions (**Download PDF**, **Send email**). Not a jurisdiction-specific tax invoice — operational summary only.
 - **Later:** Further lease/tenant picker polish (e.g. keyboard UX, larger page sizes) if orgs grow past MVP scale.
+
+## Tenant & owner portals
+
+- **Done:** Dedicated portal routes and nav for `TENANT_USER` and `OWNER_USER` (not admin console).
+- **Done (tenant):** Overview, paginated invoices + detail + PDF download, paginated statement + CSV export, leases list. Tenant linked by contact email (or sole tenant in org).
+- **Done (owner):** Overview, properties drill-down, paginated invoices + detail + PDF (read-only).
+- **Blocked on Lipila approval:** Online pay (“Pay with Lipila”) in tenant portal and payment transaction history UI.
+- **Later:** Portal user invite/onboarding email flow (admin sets password manually today).
+
+## Deploy & CI
+
+- **Done:** `apps/api/Dockerfile`, `apps/web/Dockerfile` (nginx), `docker-compose.prod.yml` for full stack.
+- **Done:** GitHub Actions CI (`.github/workflows/ci.yml`) — build, unit tests, e2e with Postgres.
+- **Later:** Production SMTP, Lipila webhook URL, hosted env secrets.
 
 ## Next major candidates (unstarted)
 
