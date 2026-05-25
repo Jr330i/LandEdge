@@ -149,6 +149,7 @@ export class LedgerService {
           currency: 'ZAR',
           source: dto.source,
         },
+        include: ledgerListInclude,
       });
     });
   }

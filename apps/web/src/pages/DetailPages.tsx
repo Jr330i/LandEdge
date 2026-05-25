@@ -6507,8 +6507,9 @@ export function BillingLedgerPage() {
           setLedgerListTotal(data.length)
           return
         }
-        const rows = data.items
-        const total = data.total
+        const rows = Array.isArray(data?.items) ? data.items : []
+        const total =
+          typeof data?.total === 'number' ? data.total : rows.length
         if (rows.length === 0 && total > 0 && ledgerListPage > 0) {
           setLedgerListPage(0)
           return
@@ -6626,9 +6627,23 @@ export function BillingLedgerPage() {
           throw new Error('Session expired')
         }
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
+        return r.json() as Promise<LedgerEntryRow>
       })
-      .then(() => {
+      .then((created) => {
         setManualOpen(false)
+        setLedgerListPage(0)
+        const matchesFilters =
+          (!filterLeaseId || created.leaseId === filterLeaseId) &&
+          (!filterTenantId || created.tenant?.id === filterTenantId) &&
+          (!filterSource || created.source === filterSource)
+        if (matchesFilters) {
+          setLedgerListRows((prev) => {
+            const base = prev ?? []
+            const withoutDup = base.filter((row) => row.id !== created.id)
+            return [created, ...withoutDup].slice(0, ledgerListPageSize)
+          })
+          setLedgerListTotal((total) => total + 1)
+        }
         setLedgerListNonce((n) => n + 1)
       })
       .catch((e: Error) => setManualErr(e.message))
@@ -6749,6 +6764,11 @@ export function BillingLedgerPage() {
             <Skeleton height={36} />
             <Skeleton height={36} />
           </Stack>
+        )}
+        {ledgerListLoading && ledgerListRows !== null && ledgerListRows.length > 0 && (
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+            Refreshing…
+          </Typography>
         )}
         {!ledgerListLoading && ledgerListRows && ledgerListRows.length === 0 && (
           <Typography color="text.secondary">No ledger lines match these filters.</Typography>
