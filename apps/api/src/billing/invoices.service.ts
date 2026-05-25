@@ -19,6 +19,11 @@ import {
   invoicePdfFilename,
   renderInvoicePdf,
 } from './invoice-pdf.builder';
+import {
+  buildInvoiceLedgerNarrative,
+  buildPaymentLedgerNarrative,
+  buildReversalLedgerNarrative,
+} from './ledger-narrative.util';
 
 function csvEscape(s: string): string {
   if (/[",\n\r]/.test(s)) {
@@ -54,6 +59,18 @@ export class InvoicesService {
 
   private paymentReverseTag(paymentId: string): string {
     return `REV:${paymentId}`;
+  }
+
+  private reversalReasonFromNarrative(narrative: string): string | null {
+    const bracket = narrative.match(
+      /^([\s\S]*?)\s*\[[^\]]*INV:[0-9a-f-]{36}[^\]]*\]\s*$/i,
+    );
+    if (bracket?.[1]) {
+      const text = bracket[1].trim();
+      return text || null;
+    }
+    const legacy = narrative.match(/REV:[0-9a-f-]{36}\s+([\s\S]+)$/i);
+    return legacy?.[1]?.trim() || null;
   }
 
   private buildListWhere(
@@ -445,14 +462,14 @@ export class InvoicesService {
         }
       >();
       for (const r of reversals) {
-        const m = r.narrative.match(/REV:([0-9a-f-]{36})(?:\s+([\s\S]*))?$/i);
+        const m = r.narrative.match(/REV:([0-9a-f-]{36})/i);
         const paymentId = m?.[1];
         if (!paymentId) continue;
         reversedByPaymentId.set(paymentId, {
           id: r.id,
           createdAt: r.createdAt,
           signedAmount: r.signedAmount,
-          reason: m?.[2]?.trim() || null,
+          reason: this.reversalReasonFromNarrative(r.narrative),
         });
       }
       return payments.map((p) => ({
@@ -486,7 +503,10 @@ export class InvoicesService {
         );
       }
 
-      const narrative = `${tag} ${dto.narrative?.trim() || 'Payment allocation'}`;
+      const narrative = buildPaymentLedgerNarrative(
+        tag,
+        dto.narrative?.trim() || 'Payment allocation',
+      );
       return tx.ledgerEntry.create({
         data: {
           organizationId: inv.organizationId,
@@ -514,7 +534,10 @@ export class InvoicesService {
           'Only issued invoices can receive payments',
         );
       }
-      const text = `${tag} ${narrative?.trim() || 'Payment gateway allocation'}`;
+      const text = buildPaymentLedgerNarrative(
+        tag,
+        narrative?.trim() || 'Payment gateway allocation',
+      );
       return tx.ledgerEntry.create({
         data: {
           organizationId: inv.organizationId,
@@ -580,7 +603,7 @@ export class InvoicesService {
           leaseId: inv.leaseId,
           tenantId: inv.tenantId,
           invoiceId: null,
-          narrative: `${tag} ${reverseTag} ${reason}`,
+          narrative: buildReversalLedgerNarrative(tag, reverseTag, reason),
           signedAmount: new Prisma.Decimal(String(amount)),
           currency: inv.currency,
           source: LedgerSource.ADJUSTMENT,
@@ -1010,7 +1033,11 @@ export class InvoicesService {
         throw new BadRequestException('Invoice has no positive total');
       }
 
-      const narrative = `Invoice ${id.slice(0, 8)}… (${inv.periodStart.toISOString().slice(0, 10)}–${inv.periodEnd.toISOString().slice(0, 10)})`;
+      const narrative = buildInvoiceLedgerNarrative(
+        inv.lines,
+        inv.periodStart,
+        inv.periodEnd,
+      );
 
       await tx.ledgerEntry.create({
         data: {

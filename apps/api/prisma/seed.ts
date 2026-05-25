@@ -15,6 +15,10 @@ import {
 import * as bcrypt from 'bcrypt';
 import { setSeedRlsSession } from '../src/prisma/rls-session';
 import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../src/defaults';
+import {
+  buildInvoiceLedgerNarrative,
+  isLegacyInvoiceLedgerNarrative,
+} from '../src/billing/ledger-narrative.util';
 
 const prisma = new PrismaClient();
 
@@ -324,10 +328,30 @@ async function seedInvoicesAndLedger(
           leaseId: lease.id,
           tenantId: tenant.id,
           invoiceId: issuedInv.id,
-          narrative: `Invoice ${issuedInv.id.slice(0, 8)}… (2026-02-01–2026-02-28)`,
+          narrative: buildInvoiceLedgerNarrative(
+            issuedInv.lines,
+            issuedInv.periodStart,
+            issuedInv.periodEnd,
+          ),
           signedAmount: total,
           currency: DEFAULT_CURRENCY,
           source: LedgerSource.INVOICE,
+        },
+      });
+    } else if (
+      isLegacyInvoiceLedgerNarrative(
+        issuedInv.ledgerEntry.narrative,
+        issuedInv.id,
+      )
+    ) {
+      await tx.ledgerEntry.update({
+        where: { id: issuedInv.ledgerEntry.id },
+        data: {
+          narrative: buildInvoiceLedgerNarrative(
+            issuedInv.lines,
+            issuedInv.periodStart,
+            issuedInv.periodEnd,
+          ),
         },
       });
     }

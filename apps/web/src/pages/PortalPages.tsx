@@ -1,5 +1,6 @@
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import { apiUrl } from '../lib/api'
+import { displayLedgerNarrative } from '../lib/ledgerNarrative'
 import ApartmentOutlined from '@mui/icons-material/ApartmentOutlined'
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import PictureAsPdfOutlined from '@mui/icons-material/PictureAsPdfOutlined'
@@ -515,7 +516,7 @@ export function TenantStatementPage() {
                   <TableRow key={r.id}>
                     <TableCell>{fmtDate(r.createdAt)}</TableCell>
                     <TableCell>{r.source}</TableCell>
-                    <TableCell>{r.narrative}</TableCell>
+                    <TableCell>{displayLedgerNarrative(r.narrative)}</TableCell>
                     <TableCell align="right">{fmtMoney(r.currency, r.signedAmount)}</TableCell>
                   </TableRow>
                 ))}

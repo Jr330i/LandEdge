@@ -100,6 +100,7 @@ import { apiUrl } from '../lib/api'
 import { authHeaders } from '../lib/auth'
 import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../lib/defaults'
 import { downloadPdfFromResponse } from '../lib/downloadPdf'
+import { displayLedgerNarrative } from '../lib/ledgerNarrative'
 import { LeaseUnitCascadeFields } from './LeaseUnitCascadeFields'
 import { PropertyHierarchyPanel } from './PropertyHierarchyPanel'
 import { usePropertyUnitCascade } from './usePropertyUnitCascade'
@@ -5797,7 +5798,7 @@ export function BillingInvoiceDetailPage() {
                         }}
                       >
                         <Box>
-                          <Typography variant="body2">{p.narrative}</Typography>
+                          <Typography variant="body2">{displayLedgerNarrative(p.narrative)}</Typography>
                           <Stack direction="row" spacing={1} alignItems="center">
                             <Typography variant="caption" color="text.secondary">
                               {new Date(p.createdAt).toLocaleString()}
@@ -6350,7 +6351,7 @@ export function BillingInvoiceDetailPage() {
                 <Typography variant="body2" color="text.secondary">
                   {new Date(inv.ledgerEntry.createdAt).toLocaleString()}
                 </Typography>
-                <Typography variant="body1">{inv.ledgerEntry.narrative}</Typography>
+                <Typography variant="body1">{displayLedgerNarrative(inv.ledgerEntry.narrative)}</Typography>
                 <Typography
                   variant="body1"
                   fontWeight={700}
@@ -6807,7 +6808,7 @@ export function BillingLedgerPage() {
                       >
                         {row.source}
                       </TableCell>
-                      <TableCell>{row.narrative}</TableCell>
+                      <TableCell>{displayLedgerNarrative(row.narrative)}</TableCell>
                       <TableCell
                         align="right"
                         sx={{
