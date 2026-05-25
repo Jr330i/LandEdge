@@ -20,10 +20,19 @@ async function bootstrap() {
   app.enableCors({
     origin: (() => {
       const raw = process.env.CORS_ORIGINS?.trim();
-      if (raw) {
-        return raw.split(',').map((s) => s.trim()).filter(Boolean);
+      if (!raw) {
+        return [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/];
       }
-      return [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/];
+      return raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((entry) => {
+          if (entry === '*.vercel.app' || entry === 'https://*.vercel.app') {
+            return /^https:\/\/[\w-]+\.vercel\.app$/;
+          }
+          return entry;
+        });
     })(),
     credentials: true,
   });

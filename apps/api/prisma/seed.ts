@@ -3,19 +3,38 @@ import {
   LedgerSource,
   Prisma,
   PrismaClient,
+  type Organization,
+  type Building,
+  type ChargeSchedule,
+  type Floor,
+  type Lease,
+  type Portfolio,
+  type Tenant,
+  type Unit,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { setSeedRlsSession } from '../src/prisma/rls-session';
 
 const prisma = new PrismaClient();
 
+/** Short transactions — Neon pooler (-pooler host) cannot hold one long interactive tx. */
+async function withSeedRls<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      await setSeedRlsSession(tx);
+      return fn(tx);
+    },
+    { maxWait: 10_000, timeout: 60_000 },
+  );
+}
+
 async function main() {
   const passwordHash = await bcrypt.hash('demo123', 10);
 
-  await prisma.$transaction(async (tx) => {
-    await setSeedRlsSession(tx);
-
-    const org = await tx.organization.upsert({
+  const org = await withSeedRls(async (tx) =>
+    tx.organization.upsert({
       where: { slug: 'demo' },
       create: {
         name: 'Demo Property Co',
@@ -24,76 +43,72 @@ async function main() {
         baseCurrency: 'ZAR',
       },
       update: {},
-    });
+    }),
+  );
 
-    await tx.user.upsert({
-      where: {
-        organizationId_email: {
-          organizationId: org.id,
-          email: 'admin@demo.sofinda.local',
+  await seedUsers(org, passwordHash);
+
+  const { portfolio, building, floor, demoUnit } = await seedProperty(org);
+  const { tenant, lease } = await seedTenantAndLease(org, demoUnit);
+  const rentSchedule = await seedChargeSchedule(org, lease);
+  await seedInvoicesAndLedger(org, lease, tenant, rentSchedule, demoUnit);
+
+  console.info('Seed completed.');
+}
+
+async function seedUsers(org: Organization, passwordHash: string) {
+  const users = [
+    {
+      email: 'admin@demo.sofinda.local',
+      displayName: 'Demo Org Admin',
+      role: 'ORG_ADMIN' as const,
+    },
+    {
+      email: 'super@demo.sofinda.local',
+      displayName: 'Platform Super Admin',
+      role: 'SUPER_ADMIN' as const,
+    },
+    {
+      email: 'tenant@demo.sofinda.local',
+      displayName: 'Demo Tenant User',
+      role: 'TENANT_USER' as const,
+    },
+    {
+      email: 'owner@demo.sofinda.local',
+      displayName: 'Demo Property Owner',
+      role: 'OWNER_USER' as const,
+    },
+  ];
+
+  for (const user of users) {
+    await withSeedRls(async (tx) =>
+      tx.user.upsert({
+        where: {
+          organizationId_email: {
+            organizationId: org.id,
+            email: user.email,
+          },
         },
-      },
-      create: {
-        organizationId: org.id,
-        email: 'admin@demo.sofinda.local',
-        passwordHash,
-        displayName: 'Demo Org Admin',
-        role: 'ORG_ADMIN',
-      },
-      update: { passwordHash },
-    });
-
-    await tx.user.upsert({
-      where: {
-        organizationId_email: {
+        create: {
           organizationId: org.id,
-          email: 'super@demo.sofinda.local',
+          email: user.email,
+          passwordHash,
+          displayName: user.displayName,
+          role: user.role,
         },
-      },
-      create: {
-        organizationId: org.id,
-        email: 'super@demo.sofinda.local',
-        passwordHash,
-        displayName: 'Platform Super Admin',
-        role: 'SUPER_ADMIN',
-      },
-      update: { passwordHash },
-    });
+        update: { passwordHash },
+      }),
+    );
+  }
+}
 
-    await tx.user.upsert({
-      where: {
-        organizationId_email: {
-          organizationId: org.id,
-          email: 'tenant@demo.sofinda.local',
-        },
-      },
-      create: {
-        organizationId: org.id,
-        email: 'tenant@demo.sofinda.local',
-        passwordHash,
-        displayName: 'Demo Tenant User',
-        role: 'TENANT_USER',
-      },
-      update: { passwordHash },
-    });
-
-    await tx.user.upsert({
-      where: {
-        organizationId_email: {
-          organizationId: org.id,
-          email: 'owner@demo.sofinda.local',
-        },
-      },
-      create: {
-        organizationId: org.id,
-        email: 'owner@demo.sofinda.local',
-        passwordHash,
-        displayName: 'Demo Property Owner',
-        role: 'OWNER_USER',
-      },
-      update: { passwordHash },
-    });
-
+async function seedProperty(org: Organization): Promise<{
+  portfolio: Portfolio;
+  building: Building;
+  floor: Floor;
+  demoUnit: Unit;
+}> {
+  return withSeedRls(async (tx) => {
     let portfolio = await tx.portfolio.findFirst({
       where: { organizationId: org.id, name: 'Demo Portfolio' },
     });
@@ -147,6 +162,15 @@ async function main() {
       update: {},
     });
 
+    return { portfolio, building, floor, demoUnit };
+  });
+}
+
+async function seedTenantAndLease(
+  org: Organization,
+  demoUnit: Unit,
+): Promise<{ tenant: Tenant; lease: Lease }> {
+  return withSeedRls(async (tx) => {
     let tenant = await tx.tenant.findFirst({
       where: {
         organizationId: org.id,
@@ -177,14 +201,21 @@ async function main() {
           status: 'ACTIVE',
           terms: {},
           leaseUnits: {
-            create: [
-              { unitId: demoUnit.id, percentageAllocated: 100 },
-            ],
+            create: [{ unitId: demoUnit.id, percentageAllocated: 100 }],
           },
         },
       });
     }
 
+    return { tenant, lease };
+  });
+}
+
+async function seedChargeSchedule(
+  org: Organization,
+  lease: Lease,
+): Promise<ChargeSchedule> {
+  return withSeedRls(async (tx) => {
     let rentSchedule = await tx.chargeSchedule.findFirst({
       where: { leaseId: lease.id, kind: 'RENT' },
     });
@@ -203,7 +234,18 @@ async function main() {
         },
       });
     }
+    return rentSchedule;
+  });
+}
 
+async function seedInvoicesAndLedger(
+  org: Organization,
+  lease: Lease,
+  tenant: Tenant,
+  rentSchedule: ChargeSchedule,
+  demoUnit: Unit,
+) {
+  await withSeedRls(async (tx) => {
     const draftInv = await tx.invoice.findFirst({
       where: {
         leaseId: lease.id,
@@ -222,7 +264,8 @@ async function main() {
           periodEnd: new Date('2026-03-31'),
           dueDate: new Date('2026-04-07'),
           currency: 'ZAR',
-          notes: 'Demo draft — issue from admin UI or POST /billing/invoices/:id/issue',
+          notes:
+            'Demo draft — issue from admin UI or POST /billing/invoices/:id/issue',
           lines: {
             create: [
               {
@@ -310,6 +353,7 @@ async function main() {
         },
       });
     }
+
     await tx.unit.update({
       where: { id: demoUnit.id },
       data: { status: 'LEASED' },
@@ -318,9 +362,6 @@ async function main() {
 }
 
 main()
-  .then(() => {
-    console.info('Seed completed.');
-  })
   .catch((e) => {
     console.error(e);
     process.exit(1);
