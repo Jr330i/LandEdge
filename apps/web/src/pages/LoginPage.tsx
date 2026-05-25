@@ -1,4 +1,5 @@
 import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined'
+import { apiUrl } from '../lib/api'
 import CloudDoneOutlined from '@mui/icons-material/CloudDoneOutlined'
 import CloudOffOutlined from '@mui/icons-material/CloudOffOutlined'
 import {
@@ -54,7 +55,7 @@ export function LoginPage({
     setForgotErr(null)
     setForgotOk(false)
     setForgotLoading(true)
-    fetch('/api/v1/auth/forgot-password', {
+    fetch(apiUrl('/api/v1/auth/forgot-password'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

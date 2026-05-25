@@ -1,4 +1,5 @@
 import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined'
+import { apiUrl } from '../lib/api'
 import DeleteOutlineOutlined from '@mui/icons-material/DeleteOutlineOutlined'
 import DragIndicatorOutlined from '@mui/icons-material/DragIndicatorOutlined'
 import EditOutlined from '@mui/icons-material/EditOutlined'
@@ -164,7 +165,7 @@ export function PropertyHierarchyPanel() {
       }
       setBuildings(null)
       setBuildingsErr(null)
-      fetch(`/api/v1/buildings?portfolioId=${encodeURIComponent(pid)}`, {
+      fetch(apiUrl(`/api/v1/buildings?portfolioId=${encodeURIComponent(pid)}`), {
         headers: authHeaders(t),
       })
         .then(async (r) => {
@@ -190,7 +191,7 @@ export function PropertyHierarchyPanel() {
       }
       setFloors(null)
       setFloorsErr(null)
-      fetch(`/api/v1/floors?buildingId=${encodeURIComponent(bid)}`, {
+      fetch(apiUrl(`/api/v1/floors?buildingId=${encodeURIComponent(bid)}`), {
         headers: authHeaders(t),
       })
         .then(async (r) => {
@@ -216,7 +217,7 @@ export function PropertyHierarchyPanel() {
       }
       setUnits(null)
       setUnitsErr(null)
-      fetch(`/api/v1/units?floorId=${encodeURIComponent(fid)}`, {
+      fetch(apiUrl(`/api/v1/units?floorId=${encodeURIComponent(fid)}`), {
         headers: authHeaders(t),
       })
         .then(async (r) => {
@@ -237,7 +238,7 @@ export function PropertyHierarchyPanel() {
     (ordered: BuildingRow[]) => {
       if (!token || !portfolioId) return
       setBuildings(ordered)
-      fetch('/api/v1/buildings/reorder', {
+      fetch(apiUrl('/api/v1/buildings/reorder'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
@@ -264,7 +265,7 @@ export function PropertyHierarchyPanel() {
     (ordered: FloorRow[]) => {
       if (!token || !selectedBuildingId) return
       setFloors(ordered)
-      fetch('/api/v1/floors/reorder', {
+      fetch(apiUrl('/api/v1/floors/reorder'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
@@ -291,7 +292,7 @@ export function PropertyHierarchyPanel() {
     (ordered: UnitRow[]) => {
       if (!token || !selectedFloorId) return
       setUnits(ordered)
-      fetch('/api/v1/units/reorder', {
+      fetch(apiUrl('/api/v1/units/reorder'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
@@ -384,7 +385,7 @@ export function PropertyHierarchyPanel() {
       const n = parseFloat(lon.replace(',', '.'))
       if (Number.isFinite(n)) body.longitude = String(n)
     }
-    fetch('/api/v1/buildings', {
+    fetch(apiUrl('/api/v1/buildings'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -425,7 +426,7 @@ export function PropertyHierarchyPanel() {
       const n = parseInt(lv, 10)
       if (Number.isFinite(n)) body.level = n
     }
-    fetch('/api/v1/floors', {
+    fetch(apiUrl('/api/v1/floors'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -473,7 +474,7 @@ export function PropertyHierarchyPanel() {
       const n = parseFloat(ar.replace(',', '.'))
       if (Number.isFinite(n)) body.rentableArea = n
     }
-    fetch('/api/v1/units', {
+    fetch(apiUrl('/api/v1/units'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -534,7 +535,7 @@ export function PropertyHierarchyPanel() {
         : Number.isFinite(parseFloat(lon.replace(',', '.')))
           ? { longitude: parseFloat(lon.replace(',', '.')) }
           : {}
-    fetch(`/api/v1/buildings/${editingBuilding.id}`, {
+    fetch(apiUrl(`/api/v1/buildings/${editingBuilding.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -566,7 +567,7 @@ export function PropertyHierarchyPanel() {
     if (!token || !deletingBuilding) return
     setBuildDeleteSaving(true)
     setBuildDeleteErr(null)
-    fetch(`/api/v1/buildings/${deletingBuilding.id}`, {
+    fetch(apiUrl(`/api/v1/buildings/${deletingBuilding.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })
@@ -607,7 +608,7 @@ export function PropertyHierarchyPanel() {
         : Number.isFinite(parseInt(lv, 10))
           ? { level: parseInt(lv, 10) }
           : {}
-    fetch(`/api/v1/floors/${editingFloor.id}`, {
+    fetch(apiUrl(`/api/v1/floors/${editingFloor.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -637,7 +638,7 @@ export function PropertyHierarchyPanel() {
     if (!token || !deletingFloor) return
     setFloorDeleteSaving(true)
     setFloorDeleteErr(null)
-    fetch(`/api/v1/floors/${deletingFloor.id}`, {
+    fetch(apiUrl(`/api/v1/floors/${deletingFloor.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })
@@ -684,7 +685,7 @@ export function PropertyHierarchyPanel() {
         : Number.isFinite(areaN)
           ? { rentableArea: areaN as number }
           : {}
-    fetch(`/api/v1/units/${editingUnit.id}`, {
+    fetch(apiUrl(`/api/v1/units/${editingUnit.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -716,7 +717,7 @@ export function PropertyHierarchyPanel() {
     if (!token || !deletingUnit) return
     setUnitDeleteSaving(true)
     setUnitDeleteErr(null)
-    fetch(`/api/v1/units/${deletingUnit.id}`, {
+    fetch(apiUrl(`/api/v1/units/${deletingUnit.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })

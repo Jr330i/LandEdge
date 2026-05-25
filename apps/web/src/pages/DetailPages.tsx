@@ -96,6 +96,7 @@ import type {
 } from '../dashboard/types'
 import { PERFORMANCE_VIEW_ROLES } from '../dashboard/types'
 import { readApiErrorMessage } from '../lib/apiError'
+import { apiUrl } from '../lib/api'
 import { authHeaders } from '../lib/auth'
 import { downloadPdfFromResponse } from '../lib/downloadPdf'
 import { LeaseUnitCascadeFields } from './LeaseUnitCascadeFields'
@@ -334,7 +335,7 @@ export function MyProfilePage() {
     if (!token) return
     setLoading(true)
     setErr(null)
-    fetch('/api/v1/dashboard/profile-metrics', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/dashboard/profile-metrics'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           signOut()
@@ -548,7 +549,7 @@ export function PerformancePage() {
     if (!token || !allowed) return
     setLoading(true)
     setErr(null)
-    fetch('/api/v1/dashboard/performance', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/dashboard/performance'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           signOut()
@@ -890,7 +891,7 @@ export function OrganizationsPage() {
     if (cur.length === 3) body.baseCurrency = cur
     const tz = createTimezone.trim()
     if (tz) body.timezone = tz
-    fetch('/api/v1/organizations', {
+    fetch(apiUrl('/api/v1/organizations'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -950,7 +951,7 @@ export function OrganizationsPage() {
     if (!token || !editingOrgProfile || !canEditInvoiceProfile) return
     setOrgProfileSaving(true)
     setOrgProfileErr(null)
-    fetch(`/api/v1/organizations/${editingOrgProfile.id}/invoice-profile`, {
+    fetch(apiUrl(`/api/v1/organizations/${editingOrgProfile.id}/invoice-profile`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -1014,7 +1015,7 @@ export function OrganizationsPage() {
     if (!token || !canManageUsers || !userOrgId) return
     setOrgUsersLoading(true)
     setOrgUsersErr(null)
-    fetch(`/api/v1/organizations/${userOrgId}/users`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/organizations/${userOrgId}/users`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           signOut()
@@ -1062,7 +1063,7 @@ export function OrganizationsPage() {
     } else {
       body.password = newUserPassword
     }
-    fetch(`/api/v1/organizations/${userOrgId}/users`, {
+    fetch(apiUrl(`/api/v1/organizations/${userOrgId}/users`), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -1101,7 +1102,7 @@ export function OrganizationsPage() {
   const resendInvite = (u: OrganizationUserRow) => {
     if (!token || !canManageUsers || !userOrgId) return
     setInviteUserErr(null)
-    fetch(`/api/v1/organizations/${userOrgId}/users/${u.id}/invite`, {
+    fetch(apiUrl(`/api/v1/organizations/${userOrgId}/users/${u.id}/invite`), {
       method: 'POST',
       headers: authHeaders(token),
     })
@@ -1136,7 +1137,7 @@ export function OrganizationsPage() {
     if (!token || !canManageUsers || !userOrgId || !editingUser) return
     setEditUserSaving(true)
     setEditUserErr(null)
-    fetch(`/api/v1/organizations/${userOrgId}/users/${editingUser.id}`, {
+    fetch(apiUrl(`/api/v1/organizations/${userOrgId}/users/${editingUser.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -1168,7 +1169,7 @@ export function OrganizationsPage() {
     if (!token || !canManageUsers || !userOrgId) return
     setDeleteUserErr(null)
     if (!window.confirm(`Delete user ${u.email}?`)) return
-    fetch(`/api/v1/organizations/${userOrgId}/users/${u.id}`, {
+    fetch(apiUrl(`/api/v1/organizations/${userOrgId}/users/${u.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })
@@ -1760,7 +1761,7 @@ export function PortfoliosPage() {
     if (isSuperAdmin && editPortfolioOrgId) {
       body.organizationId = editPortfolioOrgId
     }
-    fetch(`/api/v1/portfolios/${editingPortfolio.id}`, {
+    fetch(apiUrl(`/api/v1/portfolios/${editingPortfolio.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -1787,7 +1788,7 @@ export function PortfoliosPage() {
     if (!token || !deletingPortfolio) return
     setPortfolioDeleteSaving(true)
     setPortfolioDeleteErr(null)
-    fetch(`/api/v1/portfolios/${deletingPortfolio.id}`, {
+    fetch(apiUrl(`/api/v1/portfolios/${deletingPortfolio.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })
@@ -2171,7 +2172,7 @@ export function TenantsPage() {
       pageSize: String(tenantListPageSize),
     })
     if (debouncedTenantSearch) params.set('q', debouncedTenantSearch)
-    fetch(`/api/v1/tenants?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/tenants?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           handleUnauthorized()
@@ -2248,7 +2249,7 @@ export function TenantsPage() {
     if (t) body.tradingName = t
     if (em) body.contactEmail = em
     if (ph) body.contactPhone = ph
-    fetch('/api/v1/tenants', {
+    fetch(apiUrl('/api/v1/tenants'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -2284,7 +2285,7 @@ export function TenantsPage() {
     }
     setEditSaving(true)
     setEditErr(null)
-    fetch(`/api/v1/tenants/${editingTenant.id}`, {
+    fetch(apiUrl(`/api/v1/tenants/${editingTenant.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -2317,7 +2318,7 @@ export function TenantsPage() {
     if (!token || !deletingTenant) return
     setDeleteSaving(true)
     setDeleteErr(null)
-    fetch(`/api/v1/tenants/${deletingTenant.id}`, {
+    fetch(apiUrl(`/api/v1/tenants/${deletingTenant.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })
@@ -2756,7 +2757,7 @@ export function LeasesPage() {
     })
     if (leaseTenantFilter) params.set('tenantId', leaseTenantFilter)
     if (debouncedLeaseSearch) params.set('q', debouncedLeaseSearch)
-    fetch(`/api/v1/leases?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/leases?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           handleUnauthorized()
@@ -2815,7 +2816,7 @@ export function LeasesPage() {
     }
     if (!token) return
     let cancelled = false
-    fetch(`/api/v1/tenants/${encodeURIComponent(createTenantId)}`, {
+    fetch(apiUrl(`/api/v1/tenants/${encodeURIComponent(createTenantId)}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -2851,7 +2852,7 @@ export function LeasesPage() {
       superAdmin && oid ? `?organizationId=${encodeURIComponent(oid)}` : ''
     setOrgStaffLoading(true)
     setOrgStaffErr(null)
-    fetch(`/api/v1/dashboard/org-staff${orgParam}`, {
+    fetch(apiUrl(`/api/v1/dashboard/org-staff${orgParam}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -2921,7 +2922,7 @@ export function LeasesPage() {
       unitsPayload.push({ unitId, percentageAllocated: n })
     }
     setCreateSaving(true)
-    fetch('/api/v1/leases', {
+    fetch(apiUrl('/api/v1/leases'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -3028,7 +3029,7 @@ export function LeasesPage() {
     }
     setEditSaving(true)
     setEditErr(null)
-    fetch(`/api/v1/leases/${editingLease.id}`, {
+    fetch(apiUrl(`/api/v1/leases/${editingLease.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -3068,7 +3069,7 @@ export function LeasesPage() {
     if (!token || !deletingLease) return
     setDeleteSaving(true)
     setDeleteErr(null)
-    fetch(`/api/v1/leases/${deletingLease.id}`, {
+    fetch(apiUrl(`/api/v1/leases/${deletingLease.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })
@@ -3761,7 +3762,7 @@ export function BillingSchedulesPage() {
     }
     setScheduleErr(null)
     fetch(
-      `/api/v1/billing/charge-schedules?leaseId=${encodeURIComponent(billingLeaseId)}`,
+      apiUrl(`/api/v1/billing/charge-schedules?leaseId=${encodeURIComponent(billingLeaseId)}`),
       { headers: authHeaders(token) },
     )
       .then(async (r) => {
@@ -3839,7 +3840,7 @@ export function BillingSchedulesPage() {
     (ordered: ChargeScheduleRow[]) => {
       if (!token || !billingLeaseId) return
       setScheduleRows(ordered)
-      fetch('/api/v1/billing/charge-schedules/reorder', {
+      fetch(apiUrl('/api/v1/billing/charge-schedules/reorder'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
@@ -3935,7 +3936,7 @@ export function BillingSchedulesPage() {
     if (lab) body.label = lab
     const end = createEndDate.trim()
     if (end) body.endDate = end
-    fetch('/api/v1/billing/charge-schedules', {
+    fetch(apiUrl('/api/v1/billing/charge-schedules'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -4001,7 +4002,7 @@ export function BillingSchedulesPage() {
     body.label = lab.length > 0 ? lab : null
     const end = editEndDate.trim()
     body.endDate = end.length > 0 ? end : null
-    fetch(`/api/v1/billing/charge-schedules/${editingRow.id}`, {
+    fetch(apiUrl(`/api/v1/billing/charge-schedules/${editingRow.id}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -4028,7 +4029,7 @@ export function BillingSchedulesPage() {
     if (!token || !deletingRow) return
     setDeleteSaving(true)
     setDeleteErr(null)
-    fetch(`/api/v1/billing/charge-schedules/${deletingRow.id}`, {
+    fetch(apiUrl(`/api/v1/billing/charge-schedules/${deletingRow.id}`), {
       method: 'DELETE',
       headers: authHeaders(token),
     })
@@ -4691,7 +4692,7 @@ export function BillingInvoicesPage() {
     if (filterStatus) params.set('status', filterStatus)
     if (periodFrom) params.set('periodFrom', periodFrom)
     if (periodTo) params.set('periodTo', periodTo)
-    fetch(`/api/v1/billing/invoices?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/billing/invoices?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           handleUnauthorized()
@@ -4762,7 +4763,7 @@ export function BillingInvoicesPage() {
     setBillingActionErr(null)
     const q = buildInvoiceExportParams()
     const suffix = q.toString() ? `?${q}` : ''
-    fetch(`/api/v1/billing/invoices/export${suffix}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/billing/invoices/export${suffix}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           handleUnauthorized()
@@ -5142,7 +5143,7 @@ export function BillingInvoiceDetailPage() {
     setDraftSchedulesLoading(true)
     setDraftScheduleErr(null)
     fetch(
-      `/api/v1/billing/charge-schedules?leaseId=${encodeURIComponent(inv.leaseId)}`,
+      apiUrl(`/api/v1/billing/charge-schedules?leaseId=${encodeURIComponent(inv.leaseId)}`),
       { headers: authHeaders(token) },
     )
       .then(async (r) => {
@@ -5174,7 +5175,7 @@ export function BillingInvoiceDetailPage() {
     if (!token || !invoiceId) return Promise.resolve()
     setDetailLoading(true)
     setDetailErr(null)
-    return fetch(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}`, {
+    return fetch(apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -5211,7 +5212,7 @@ export function BillingInvoiceDetailPage() {
     setPaymentLoading(true)
     setPaymentErr(null)
     return fetch(
-      `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments`,
+      apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments`),
       { headers: authHeaders(token) },
     )
       .then(async (r) => {
@@ -5244,7 +5245,7 @@ export function BillingInvoiceDetailPage() {
     setActivityLoading(true)
     setActivityErr(null)
     return fetch(
-      `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/activity`,
+      apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/activity`),
       { headers: authHeaders(token) },
     )
       .then(async (r) => {
@@ -5272,7 +5273,7 @@ export function BillingInvoiceDetailPage() {
     setReversingPaymentId(reverseTarget.id)
     setPaymentErr(null)
     fetch(
-      `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments/${encodeURIComponent(reverseTarget.id)}/reverse`,
+      apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments/${encodeURIComponent(reverseTarget.id)}/reverse`),
       {
         method: 'POST',
         headers: {
@@ -5354,7 +5355,7 @@ export function BillingInvoiceDetailPage() {
     }
     setSaveDraftBusy(true)
     setSaveDraftErr(null)
-    fetch(`/api/v1/billing/invoices/${encodeURIComponent(inv.id)}`, {
+    fetch(apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(inv.id)}`), {
       method: 'PATCH',
       headers: {
         ...authHeaders(token),
@@ -5412,7 +5413,7 @@ export function BillingInvoiceDetailPage() {
     if (!token || !invoiceId) return
     setBillingActionErr(null)
     fetch(
-      `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+      apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`),
       { headers: authHeaders(token) },
     )
       .then(async (r) => {
@@ -5433,7 +5434,7 @@ export function BillingInvoiceDetailPage() {
     setEmailSending(true)
     setEmailErr(null)
     setBillingActionErr(null)
-    fetch(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/send-email`, {
+    fetch(apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/send-email`), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -5999,7 +6000,7 @@ export function BillingInvoiceDetailPage() {
                   setPaymentSaving(true)
                   setPaymentSaveErr(null)
                   fetch(
-                    `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments`,
+                    apiUrl(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/payments`),
                     {
                       method: 'POST',
                       headers: {
@@ -6487,7 +6488,7 @@ export function BillingLedgerPage() {
     if (filterSource) params.set('source', filterSource)
     if (createdFrom) params.set('createdFrom', createdFrom)
     if (createdTo) params.set('createdTo', createdTo)
-    fetch(`/api/v1/billing/ledger?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/billing/ledger?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           handleUnauthorized()
@@ -6558,7 +6559,7 @@ export function BillingLedgerPage() {
     setBillingActionErr(null)
     const q = buildLedgerExportParams()
     const suffix = q.toString() ? `?${q}` : ''
-    fetch(`/api/v1/billing/ledger/export${suffix}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/billing/ledger/export${suffix}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           handleUnauthorized()
@@ -6606,7 +6607,7 @@ export function BillingLedgerPage() {
     }
     setManualSaving(true)
     setManualErr(null)
-    fetch('/api/v1/billing/ledger/manual', {
+    fetch(apiUrl('/api/v1/billing/ledger/manual'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),

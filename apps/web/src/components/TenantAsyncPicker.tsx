@@ -1,4 +1,5 @@
 import Autocomplete from '@mui/material/Autocomplete'
+import { apiUrl } from '../lib/api'
 import CircularProgress from '@mui/material/CircularProgress'
 import TextField from '@mui/material/TextField'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -59,7 +60,7 @@ export function TenantAsyncPicker({
     }
     let cancelled = false
     setDetailLoading(true)
-    fetch(`/api/v1/tenants/${encodeURIComponent(value)}`, {
+    fetch(apiUrl(`/api/v1/tenants/${encodeURIComponent(value)}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -108,7 +109,7 @@ export function TenantAsyncPicker({
       pageSize: String(LIST_PAGE_SIZE),
     })
     if (debouncedQ) params.set('q', debouncedQ)
-    fetch(`/api/v1/tenants?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/tenants?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (r.status === 401) {
           onUnauthorized?.()

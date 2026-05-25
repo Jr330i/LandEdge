@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { apiUrl } from '../lib/api'
 import { authHeaders } from '../lib/auth'
 import { readApiErrorMessage } from '../lib/apiError'
 
@@ -53,7 +54,7 @@ export function usePropertyUnitCascade(
     setHierarchyErr(null)
     setBuildings(null)
     fetch(
-      `/api/v1/buildings?portfolioId=${encodeURIComponent(portfolioId)}`,
+      apiUrl(`/api/v1/buildings?portfolioId=${encodeURIComponent(portfolioId)}`),
       { headers: authHeaders(token) },
     )
       .then(async (r) => {
@@ -86,7 +87,7 @@ export function usePropertyUnitCascade(
     let cancelled = false
     setHierarchyErr(null)
     setFloors(null)
-    fetch(`/api/v1/floors?buildingId=${encodeURIComponent(buildingId)}`, {
+    fetch(apiUrl(`/api/v1/floors?buildingId=${encodeURIComponent(buildingId)}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -119,7 +120,7 @@ export function usePropertyUnitCascade(
     let cancelled = false
     setHierarchyErr(null)
     setUnits(null)
-    fetch(`/api/v1/units?floorId=${encodeURIComponent(floorId)}`, {
+    fetch(apiUrl(`/api/v1/units?floorId=${encodeURIComponent(floorId)}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -216,7 +217,7 @@ export function usePropertyUnitCascade(
     let cancelled = false
     void Promise.all(
       missing.map((unitId) =>
-        fetch(`/api/v1/units/${encodeURIComponent(unitId)}`, {
+        fetch(apiUrl(`/api/v1/units/${encodeURIComponent(unitId)}`), {
           headers: authHeaders(token),
         }).then(async (r) => {
           if (r.status === 401) {

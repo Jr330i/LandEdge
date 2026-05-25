@@ -8,6 +8,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useState, type FormEvent } from 'react'
+import { apiUrl } from '../lib/api'
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
 
 export function ResetPasswordPage() {
@@ -36,7 +37,7 @@ export function ResetPasswordPage() {
       return
     }
     setLoading(true)
-    fetch('/api/v1/auth/reset-password', {
+    fetch(apiUrl('/api/v1/auth/reset-password'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, password }),
