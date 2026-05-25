@@ -1,4 +1,5 @@
 import ApartmentOutlined from '@mui/icons-material/ApartmentOutlined'
+import { apiUrl } from '../lib/api'
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import BusinessOutlined from '@mui/icons-material/BusinessOutlined'
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
@@ -145,7 +146,7 @@ export function DashboardHome() {
     let cancelled = false
     setTenantLoading(true)
     setTenantErr(null)
-    fetch('/api/v1/dashboard/tenant-portal', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/dashboard/tenant-portal'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<TenantPortalSnapshot>
@@ -177,7 +178,7 @@ export function DashboardHome() {
     let cancelled = false
     setOwnerLoading(true)
     setOwnerErr(null)
-    fetch('/api/v1/dashboard/owner-portal', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/dashboard/owner-portal'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<OwnerPortalSnapshot>

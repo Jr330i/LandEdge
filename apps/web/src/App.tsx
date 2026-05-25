@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { apiUrl } from './lib/api'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { DashboardContext, type DashboardContextValue } from './dashboard/context'
 import type {
@@ -84,7 +85,7 @@ function AppRoot() {
   const hasConsoleAccess = me != null && CONSOLE_ACCESS_ROLES.has(me.role)
 
   useEffect(() => {
-    fetch('/api/v1/health')
+    fetch(apiUrl('/api/v1/health'))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -96,7 +97,7 @@ function AppRoot() {
   const loadOrganizations = useCallback((t: string) => {
     setOrgs(null)
     setOrgsErr(null)
-    fetch('/api/v1/organizations', { headers: authHeaders(t) })
+    fetch(apiUrl('/api/v1/organizations'), { headers: authHeaders(t) })
       .then((r) => {
         if (r.status === 401) {
           sessionStorage.removeItem(TOKEN_KEY)
@@ -115,7 +116,7 @@ function AppRoot() {
   const loadPortfolios = useCallback((t: string) => {
     setPortfolios(null)
     setPortfoliosErr(null)
-    fetch('/api/v1/portfolios', { headers: authHeaders(t) })
+    fetch(apiUrl('/api/v1/portfolios'), { headers: authHeaders(t) })
       .then((r) => {
         if (r.status === 401) {
           sessionStorage.removeItem(TOKEN_KEY)
@@ -134,7 +135,7 @@ function AppRoot() {
   const loadDashboardMetrics = useCallback((t: string) => {
     setDashboardMetrics(null)
     setDashboardMetricsErr(null)
-    fetch('/api/v1/dashboard/metrics', { headers: authHeaders(t) })
+    fetch(apiUrl('/api/v1/dashboard/metrics'), { headers: authHeaders(t) })
       .then((r) => {
         if (r.status === 401) {
           sessionStorage.removeItem(TOKEN_KEY)
@@ -178,7 +179,7 @@ function AppRoot() {
     e.preventDefault()
     setLoginErr(null)
     setLoginLoading(true)
-    fetch('/api/v1/auth/login', {
+    fetch(apiUrl('/api/v1/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -220,7 +221,9 @@ function AppRoot() {
           m === 'NetworkError when attempting to fetch resource.'
         ) {
           setLoginErr(
-            'Cannot reach the API. Start the API (`npm run dev:api`), use the Vite dev app URL (e.g. http://localhost:5173), and ensure Postgres is up with migrations + seed.',
+            import.meta.env.VITE_API_URL
+              ? `Cannot reach the API at ${import.meta.env.VITE_API_URL}. Check that Render is live and CORS_ORIGINS includes this site.`
+              : 'Cannot reach the API. Start the API (`npm run dev:api`), use the Vite dev app URL (e.g. http://localhost:5173), and ensure Postgres is up with migrations + seed.',
           )
         } else {
           setLoginErr(m)
@@ -283,7 +286,7 @@ function AppRoot() {
           : orgs[0].id
       body.organizationId = oid
     }
-    fetch('/api/v1/portfolios', {
+    fetch(apiUrl('/api/v1/portfolios'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),
@@ -318,7 +321,7 @@ function AppRoot() {
   const handleIssueInvoice = (invoiceId: string): Promise<void> => {
     if (!token) return Promise.resolve()
     setBillingActionErr(null)
-    return fetch(`/api/v1/billing/invoices/${invoiceId}/issue`, {
+    return fetch(apiUrl(`/api/v1/billing/invoices/${invoiceId}/issue`), {
       method: 'POST',
       headers: authHeaders(token),
     })
@@ -342,7 +345,7 @@ function AppRoot() {
   const handleVoidInvoice = (invoiceId: string): Promise<void> => {
     if (!token) return Promise.resolve()
     setBillingActionErr(null)
-    return fetch(`/api/v1/billing/invoices/${invoiceId}/void`, {
+    return fetch(apiUrl(`/api/v1/billing/invoices/${invoiceId}/void`), {
       method: 'POST',
       headers: authHeaders(token),
     })
@@ -370,7 +373,7 @@ function AppRoot() {
       .toISOString()
       .slice(0, 10)
     const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    return fetch('/api/v1/billing/invoices/generate-from-schedules', {
+    return fetch(apiUrl('/api/v1/billing/invoices/generate-from-schedules'), {
       method: 'POST',
       headers: {
         ...authHeaders(token),

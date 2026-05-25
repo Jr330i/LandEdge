@@ -1,4 +1,5 @@
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
+import { apiUrl } from '../lib/api'
 import ApartmentOutlined from '@mui/icons-material/ApartmentOutlined'
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import PictureAsPdfOutlined from '@mui/icons-material/PictureAsPdfOutlined'
@@ -169,7 +170,7 @@ export function TenantPortalHomePage() {
   useEffect(() => {
     if (!token) return
     setLoading(true)
-    fetch('/api/v1/portal/tenant', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/portal/tenant'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<TenantPortalSnapshot>
@@ -265,7 +266,7 @@ export function TenantInvoicesPage() {
     if (status) params.set('status', status)
     params.set('page', String(page + 1))
     params.set('pageSize', String(pageSize))
-    fetch(`/api/v1/portal/tenant/invoices?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/portal/tenant/invoices?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<{ items: TenantInvoiceRow[]; total: number }>
@@ -364,7 +365,7 @@ export function TenantInvoiceDetailPage() {
   useEffect(() => {
     if (!token || !invoiceId) return
     setLoading(true)
-    fetch(`/api/v1/portal/tenant/invoices/${encodeURIComponent(invoiceId)}`, {
+    fetch(apiUrl(`/api/v1/portal/tenant/invoices/${encodeURIComponent(invoiceId)}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -378,7 +379,7 @@ export function TenantInvoiceDetailPage() {
 
   const downloadPdf = () => {
     if (!token || !invoiceId) return
-    fetch(`/api/v1/portal/tenant/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+    fetch(apiUrl(`/api/v1/portal/tenant/invoices/${encodeURIComponent(invoiceId)}/pdf`), {
       headers: authHeaders(token),
     })
       .then((r) =>
@@ -462,7 +463,7 @@ export function TenantStatementPage() {
       page: String(page + 1),
       pageSize: String(pageSize),
     })
-    fetch(`/api/v1/portal/tenant/statement?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/portal/tenant/statement?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<{ balance: number; items: typeof items; total: number }>
@@ -478,7 +479,7 @@ export function TenantStatementPage() {
 
   const downloadCsv = () => {
     if (!token) return
-    fetch('/api/v1/portal/tenant/statement/export', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/portal/tenant/statement/export'), { headers: authHeaders(token) })
       .then((r) => downloadCsvFromResponse(r, 'account-statement.csv'))
       .catch((e: Error) => setBillingActionErr(e.message))
   }
@@ -546,7 +547,7 @@ export function TenantLeasesPage() {
   useEffect(() => {
     if (!token) return
     setLoading(true)
-    fetch('/api/v1/portal/tenant/leases', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/portal/tenant/leases'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<{ items: typeof items }>
@@ -604,7 +605,7 @@ export function OwnerPortalHomePage() {
   useEffect(() => {
     if (!token) return
     setLoading(true)
-    fetch('/api/v1/portal/owner', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/portal/owner'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<OwnerPortalSnapshot>
@@ -653,7 +654,7 @@ export function OwnerPropertiesPage() {
   useEffect(() => {
     if (!token) return
     setLoading(true)
-    fetch('/api/v1/portal/owner/properties', { headers: authHeaders(token) })
+    fetch(apiUrl('/api/v1/portal/owner/properties'), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<{ items: typeof items }>
@@ -726,7 +727,7 @@ export function OwnerInvoicesPage() {
       page: String(page + 1),
       pageSize: String(pageSize),
     })
-    fetch(`/api/v1/portal/owner/invoices?${params}`, { headers: authHeaders(token) })
+    fetch(apiUrl(`/api/v1/portal/owner/invoices?${params}`), { headers: authHeaders(token) })
       .then(async (r) => {
         if (!r.ok) throw new Error(await readApiErrorMessage(r))
         return r.json() as Promise<{ items: typeof items; total: number }>
@@ -810,7 +811,7 @@ export function OwnerInvoiceDetailPage() {
   useEffect(() => {
     if (!token || !invoiceId) return
     setLoading(true)
-    fetch(`/api/v1/portal/owner/invoices/${encodeURIComponent(invoiceId)}`, {
+    fetch(apiUrl(`/api/v1/portal/owner/invoices/${encodeURIComponent(invoiceId)}`), {
       headers: authHeaders(token),
     })
       .then(async (r) => {
@@ -824,7 +825,7 @@ export function OwnerInvoiceDetailPage() {
 
   const downloadPdf = () => {
     if (!token || !invoiceId) return
-    fetch(`/api/v1/portal/owner/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+    fetch(apiUrl(`/api/v1/portal/owner/invoices/${encodeURIComponent(invoiceId)}/pdf`), {
       headers: authHeaders(token),
     })
       .then((r) =>
