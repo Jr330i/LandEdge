@@ -6,6 +6,7 @@ import type { JwtAccessPayload } from '../auth/jwt.types';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationsService } from './organizations.service';
+import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../defaults';
 
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
@@ -56,8 +57,8 @@ describe('OrganizationsService', () => {
       id: '00000000-0000-4000-8000-000000000001',
       name: 'Acme',
       slug: 'acme',
-      timezone: 'Africa/Johannesburg',
-      baseCurrency: 'ZAR',
+      timezone: DEFAULT_TIMEZONE,
+      baseCurrency: DEFAULT_CURRENCY,
       settings: {},
       createdAt: new Date(),
       updatedAt: new Date(),

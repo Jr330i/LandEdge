@@ -7,6 +7,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../../defaults';
 
 export class CreateOrganizationDto {
   @ApiProperty({ example: 'Acme Property Management' })
@@ -26,13 +27,13 @@ export class CreateOrganizationDto {
   })
   slug?: string;
 
-  @ApiPropertyOptional({ example: 'Africa/Johannesburg' })
+  @ApiPropertyOptional({ example: DEFAULT_TIMEZONE })
   @IsOptional()
   @IsString()
   @MaxLength(64)
   timezone?: string;
 
-  @ApiPropertyOptional({ example: 'ZAR' })
+  @ApiPropertyOptional({ example: DEFAULT_CURRENCY })
   @IsOptional()
   @IsString()
   @Length(3, 3)

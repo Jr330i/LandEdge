@@ -6,6 +6,7 @@ import {
 import nodemailer from 'nodemailer';
 import { InvoiceStatus, LedgerSource, Prisma, UserRole } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { DEFAULT_CURRENCY } from '../defaults';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { GenerateInvoiceFromSchedulesDto } from './dto/generate-invoice-from-schedules.dto';
@@ -723,7 +724,7 @@ export class InvoicesService {
           periodStart,
           periodEnd,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-          currency: 'ZAR',
+          currency: DEFAULT_CURRENCY,
           notes: dto.notes ?? null,
           lines: {
             create: dto.lines.map((l) => ({

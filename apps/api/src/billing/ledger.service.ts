@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { LedgerSource, Prisma, UserRole } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { DEFAULT_CURRENCY } from '../defaults';
 import { PrismaService } from '../prisma/prisma.service';
 import { ManualLedgerDto } from './dto/manual-ledger.dto';
 
@@ -146,7 +147,7 @@ export class LedgerService {
           invoiceId: null,
           narrative: dto.narrative,
           signedAmount: new Prisma.Decimal(String(dto.signedAmount)),
-          currency: 'ZAR',
+          currency: DEFAULT_CURRENCY,
           source: dto.source,
         },
         include: ledgerListInclude,
