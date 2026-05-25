@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { setSeedRlsSession } from '../src/prisma/rls-session';
+import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../src/defaults';
 
 const prisma = new PrismaClient();
 
@@ -39,8 +40,8 @@ async function main() {
       create: {
         name: 'Demo Property Co',
         slug: 'demo',
-        timezone: 'Africa/Johannesburg',
-        baseCurrency: 'ZAR',
+        timezone: DEFAULT_TIMEZONE,
+        baseCurrency: DEFAULT_CURRENCY,
       },
       update: {},
     }),
@@ -117,7 +118,7 @@ async function seedProperty(org: Organization): Promise<{
         data: {
           organizationId: org.id,
           name: 'Demo Portfolio',
-          region: 'ZA',
+          region: 'ZM',
         },
       });
     }
@@ -227,7 +228,7 @@ async function seedChargeSchedule(
           kind: 'RENT',
           label: 'Base rent (demo)',
           amount: new Prisma.Decimal('15000.00'),
-          currency: 'ZAR',
+          currency: DEFAULT_CURRENCY,
           frequency: 'MONTHLY',
           startDate: new Date('2025-01-01'),
           active: true,
@@ -263,7 +264,7 @@ async function seedInvoicesAndLedger(
           periodStart: new Date('2026-03-01'),
           periodEnd: new Date('2026-03-31'),
           dueDate: new Date('2026-04-07'),
-          currency: 'ZAR',
+          currency: DEFAULT_CURRENCY,
           notes:
             'Demo draft — issue from admin UI or POST /billing/invoices/:id/issue',
           lines: {
@@ -297,7 +298,7 @@ async function seedInvoicesAndLedger(
           periodStart: new Date('2026-02-01'),
           periodEnd: new Date('2026-02-28'),
           dueDate: new Date('2026-03-07'),
-          currency: 'ZAR',
+          currency: DEFAULT_CURRENCY,
           notes: 'Demo issued invoice — visible in tenant portal',
           lines: {
             create: [
@@ -325,7 +326,7 @@ async function seedInvoicesAndLedger(
           invoiceId: issuedInv.id,
           narrative: `Invoice ${issuedInv.id.slice(0, 8)}… (2026-02-01–2026-02-28)`,
           signedAmount: total,
-          currency: 'ZAR',
+          currency: DEFAULT_CURRENCY,
           source: LedgerSource.INVOICE,
         },
       });
@@ -348,7 +349,7 @@ async function seedInvoicesAndLedger(
           invoiceId: null,
           narrative: 'Demo partial payment — February rent',
           signedAmount: new Prisma.Decimal('-5000.00'),
-          currency: 'ZAR',
+          currency: DEFAULT_CURRENCY,
           source: LedgerSource.PAYMENT,
         },
       });

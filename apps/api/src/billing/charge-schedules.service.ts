@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { UserRole } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/jwt.types';
+import { DEFAULT_CURRENCY } from '../defaults';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateChargeScheduleDto } from './dto/create-charge-schedule.dto';
 import { UpdateChargeScheduleDto } from './dto/update-charge-schedule.dto';
@@ -70,7 +71,7 @@ export class ChargeSchedulesService {
           kind: dto.kind,
           label: dto.label ?? null,
           amount: new Prisma.Decimal(String(dto.amount)),
-          currency: dto.currency ?? 'ZAR',
+          currency: dto.currency ?? DEFAULT_CURRENCY,
           frequency: dto.frequency,
           startDate: start,
           endDate: end,

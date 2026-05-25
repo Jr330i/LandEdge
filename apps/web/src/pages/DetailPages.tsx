@@ -98,6 +98,7 @@ import { PERFORMANCE_VIEW_ROLES } from '../dashboard/types'
 import { readApiErrorMessage } from '../lib/apiError'
 import { apiUrl } from '../lib/api'
 import { authHeaders } from '../lib/auth'
+import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../lib/defaults'
 import { downloadPdfFromResponse } from '../lib/downloadPdf'
 import { LeaseUnitCascadeFields } from './LeaseUnitCascadeFields'
 import { PropertyHierarchyPanel } from './PropertyHierarchyPanel'
@@ -809,8 +810,8 @@ export function OrganizationsPage() {
   } = useDashboard()
   const [createName, setCreateName] = useState('')
   const [createSlug, setCreateSlug] = useState('')
-  const [createCurrency, setCreateCurrency] = useState('ZAR')
-  const [createTimezone, setCreateTimezone] = useState('Africa/Johannesburg')
+  const [createCurrency, setCreateCurrency] = useState(DEFAULT_CURRENCY)
+  const [createTimezone, setCreateTimezone] = useState(DEFAULT_TIMEZONE)
   const [createSaving, setCreateSaving] = useState(false)
   const [createErr, setCreateErr] = useState<string | null>(null)
   const isSuperAdmin = me?.role === 'SUPER_ADMIN'
@@ -905,8 +906,8 @@ export function OrganizationsPage() {
       .then(() => {
         setCreateName('')
         setCreateSlug('')
-        setCreateCurrency('ZAR')
-        setCreateTimezone('Africa/Johannesburg')
+        setCreateCurrency(DEFAULT_CURRENCY)
+        setCreateTimezone(DEFAULT_TIMEZONE)
         reloadOrganizations()
         reloadDashboardMetrics()
       })
@@ -3791,7 +3792,7 @@ export function BillingSchedulesPage() {
   const [createKind, setCreateKind] = useState<(typeof CHARGE_SCHEDULE_KINDS)[number]>('RENT')
   const [createLabel, setCreateLabel] = useState('')
   const [createAmount, setCreateAmount] = useState('')
-  const [createCurrency, setCreateCurrency] = useState('ZAR')
+  const [createCurrency, setCreateCurrency] = useState(DEFAULT_CURRENCY)
   const [createFrequency, setCreateFrequency] = useState<
     (typeof CHARGE_SCHEDULE_FREQUENCIES)[number]
   >('MONTHLY')
@@ -3805,7 +3806,7 @@ export function BillingSchedulesPage() {
   const [editKind, setEditKind] = useState<(typeof CHARGE_SCHEDULE_KINDS)[number]>('RENT')
   const [editLabel, setEditLabel] = useState('')
   const [editAmount, setEditAmount] = useState('')
-  const [editCurrency, setEditCurrency] = useState('ZAR')
+  const [editCurrency, setEditCurrency] = useState(DEFAULT_CURRENCY)
   const [editFrequency, setEditFrequency] = useState<
     (typeof CHARGE_SCHEDULE_FREQUENCIES)[number]
   >('MONTHLY')
@@ -3881,7 +3882,7 @@ export function BillingSchedulesPage() {
     setCreateKind('RENT')
     setCreateLabel('')
     setCreateAmount('')
-    setCreateCurrency('ZAR')
+    setCreateCurrency(DEFAULT_CURRENCY)
     setCreateFrequency('MONTHLY')
     setCreateStartDate(new Date().toISOString().slice(0, 10))
     setCreateEndDate('')
@@ -3918,7 +3919,7 @@ export function BillingSchedulesPage() {
     }
     const cur = createCurrency.trim().toUpperCase()
     if (cur.length !== 3) {
-      setCreateErr('Currency must be a 3-letter code (e.g. ZAR).')
+      setCreateErr(`Currency must be a 3-letter code (e.g. ${DEFAULT_CURRENCY}).`)
       return
     }
     setCreateSaving(true)
@@ -3985,7 +3986,7 @@ export function BillingSchedulesPage() {
     }
     const cur = editCurrency.trim().toUpperCase()
     if (cur.length !== 3) {
-      setEditErr('Currency must be a 3-letter code (e.g. ZAR).')
+      setEditErr(`Currency must be a 3-letter code (e.g. ${DEFAULT_CURRENCY}).`)
       return
     }
     setEditSaving(true)

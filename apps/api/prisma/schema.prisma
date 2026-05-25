@@ -12,8 +12,8 @@ model Organization {
   id           String      @id @default(uuid()) @db.Uuid
   name         String
   slug         String      @unique
-  timezone     String      @default("Africa/Johannesburg")
-  baseCurrency String      @default("ZAR") @map("base_currency")
+  timezone     String      @default("Africa/Lusaka")
+  baseCurrency String      @default("ZMW") @map("base_currency")
   settings     Json        @default("{}")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
@@ -221,7 +221,7 @@ model ChargeSchedule {
   kind           ChargeKind
   label          String?
   amount         Decimal          @db.Decimal(14, 2)
-  currency       String           @default("ZAR")
+  currency       String           @default("ZMW")
   frequency      BillingFrequency
   startDate      DateTime         @map("start_date") @db.Date
   endDate        DateTime?        @map("end_date") @db.Date
@@ -252,7 +252,7 @@ model Invoice {
   periodStart    DateTime      @map("period_start") @db.Date
   periodEnd      DateTime      @map("period_end") @db.Date
   dueDate        DateTime?     @map("due_date") @db.Date
-  currency       String        @default("ZAR")
+  currency       String        @default("ZMW")
   notes          String?
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
@@ -309,7 +309,7 @@ model LedgerEntry {
   narrative      String
   /// Positive increases amount receivable from tenant; negative is credit/payment.
   signedAmount   Decimal      @map("signed_amount") @db.Decimal(14, 2)
-  currency       String       @default("ZAR")
+  currency       String       @default("ZMW")
   source         LedgerSource
   createdAt      DateTime     @default(now()) @map("created_at")
 
@@ -326,7 +326,7 @@ model PaymentTransaction {
   providerReference String                   @map("provider_reference")
   checkoutUrl       String?                  @map("checkout_url")
   amount            Decimal                  @db.Decimal(14, 2)
-  currency          String                   @default("ZAR")
+  currency          String                   @default("ZMW")
   status            PaymentTransactionStatus @default(INITIATED)
   settledAt         DateTime?                @map("settled_at")
   rawRequest        Json?                    @map("raw_request")
