@@ -53,5 +53,8 @@ jobs:
       - name: Unit tests
         run: npm test -w api
 
+      - name: Seed demo data
+        run: npm run prisma:seed -w api
+
       - name: E2E tests (with DB)
         run: npm run test:e2e:db -w api
